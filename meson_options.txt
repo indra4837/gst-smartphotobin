@@ -1,0 +1,5 @@
+option('gst_plugin_dir',
+  type: 'string',
+  description: 'override gstreamer plugin install path',
+  yield: true,
+)
