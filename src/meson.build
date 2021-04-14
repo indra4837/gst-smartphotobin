@@ -124,7 +124,7 @@ gst_smartphotobin_dep = declare_dependency(
   include_directories: [
     gst_smartphotobin_public_incdir,
     gst_smartphotobin_output_incdir,
-  ]
+  ],
   variables: gst_smartphotobin_public_variables,
   version: meson.project_version(),
 )
