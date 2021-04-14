@@ -116,7 +116,15 @@ else
   message('not building typelib language bindings (sudo apt-get install sudo apt install gobject-introspection)')
 endif
 
+# where vala compiler outputs the header and  for testingg
+gst_smartphotobin_output_incdir = include_directories('.')
+
 gst_smartphotobin_dep = declare_dependency(
+  link_with: gst_smartphotobin_lib,
+  include_directories: [
+    gst_smartphotobin_public_incdir,
+    gst_smartphotobin_output_incdir,
+  ]
   variables: gst_smartphotobin_public_variables,
   version: meson.project_version(),
 )
@@ -126,7 +134,4 @@ pkg.generate(gst_smartphotobin_lib,
   description: proj_description,
   variables: gst_smartphotobin_public_variables,
 )
-
-# where vala compiler outputs the header for testingg
-gst_smartphotobin_output_incdir = include_directories('.')
 
