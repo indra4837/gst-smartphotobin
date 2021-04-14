@@ -18,38 +18,50 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# setup the project's global options
-project('smartphotobin', ['cpp', 'c', 'vala'],
-  version: run_command(
-    'head', '-n', '1', files('VERSION'),
-  ).stdout().strip(),
-  meson_version: '>= 0.56.0',
-  license: 'LGPL',
-  default_options: [
-    'c_std=c11',
-    'cpp_std=c++14',
-    'warning_level=2',  # -Wextra
-    'werror=true',  # -Werror
-  ],
-)
+# this meson.build is for example code
 
-# the c++ compiler object
-valac = meson.get_compiler('vala')
+# a list of dicts describing tests
+tests = [
+#   {
+#     'description': 'test ptzf autofocus',
+#     'filename': 'test_ptzf',
+#     'sources': ['test_ptzf.cpp'],
+#     'suites': ['interactive'],
+#   },
+]
 
-# split the project version
-proj_ver = meson.project_version().split('.')
-# version minus patch revision
-proj_ver_short = proj_ver[0] + '.' + proj_ver[1]
-proj_ver_major = proj_ver[0]
-proj_ver_minor = proj_ver[1]
-proj_ver_patch = proj_ver[2]
+test_cflags = []
+if gst_dep.found()
+  test_cflags += '-DHAS_GSTREAMER'
+endif
+if get_option('PRINTER') != ''
+  test_cflags += '-DPRINTER="' + get_option('PRINTER') + '"'
+endif
 
-# all of this is used by configure_file to setup plugin registration
-proj_description = 'Smart Photo Plugin'
-proj_url = 'https://github.com/mdegans/gst-' + meson.project_name()
-binary_package = meson.project_name()
-origin = 'github'
+# build tests (and optionally execute them)
+foreach t: tests
+  exe = executable(t['filename'], t['sources'],
+    dependencies: [dependency('gstreamer-1.0')],
+    cpp_args: [
+      test_cflags,
+      '-DTEST_NAME="' + t['filename'] + '"',
+    ]
+  )
+  # skip running test if it's an interactive one
+  if 'interactive' in t['suites']
+    continue
+  endif
 
-subdir('include')
-subdir('src')
-subdir('test')
+  # run the rest of the tests in parallel
+  test(t['description'], exe,
+    protocol: 'exitcode',
+    is_parallel: false,
+    suite: t['suites'],
+    timeout: 300,  # seconds
+    env: [
+      'GST_DEBUG=4',
+      'GST_PLUGIN_PATH=' + gst_plugin_path,
+      'GST_REGISTRY_UPDATE=yes',
+    ],
+  )
+endforeach

@@ -1,0 +1,5 @@
+# ignore all
+*
+# except this file and some specific wraps
+!.gitignore
+!gst_eyescan.wrap

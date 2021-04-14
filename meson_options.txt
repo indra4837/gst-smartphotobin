@@ -1,5 +1,20 @@
-option('gst_plugin_dir',
+option('GST_PLUGIN_PATH',
   type: 'string',
   description: 'override gstreamer plugin install path',
   yield: true,
+)
+option('DEFAULT_QA_MODEL',
+  type: 'string',
+  description: 'path to default qa model',
+  value: '/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_infer_primary_nano.txt',
+)
+option('DEFAULT_DR_MODEL',
+  type: 'string',
+  description: 'path to default dr model',
+  value: '/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_infer_primary_nano.txt',
+)
+option('PRINTER',
+  type : 'string',
+  description : 'Define printer device path.',
+  yield: true,  # use superproject option if available
 )

@@ -22,50 +22,213 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
-[CCode (cprefix = "Gst", gir_namespace = "GstSmart", gir_version = "0.1", lower_case_cprefix="gst_")]
-namespace Gst.Smart {
+namespace GstSmart {
 
-static void destroy_buffer(uint8[] _, void* buffer) {
-
+/**
+ * General errors for the GstSmart namespace.
+ */
+public errordomain ElementError {
+    CONFIG,
+    CREATE,
+    ADD,
+    LINK,
+    GHOST,
+    PAD,
+    INTERFACE,
+    CAPS,
 }
 
-public Gdk.Pixbuf?
-sample_to_pixbuf(Gst.Sample sample, Gst.MapFlags flags = Gst.MapFlags.READ)
-throws CaptureError {
-    // try to get buffer from the sample
-    var buf = sample.get_buffer();
-    if (buf == null) {
-        throw new CaptureError.GET_BUFFER(
-            "failed to get buffer from sample");
-    }
-
-    // try to get caps from the sample
-    var caps = sample.get_caps();
-    if (caps == null) {
-        throw new CaptureError.GET_CAPS(
-            "failed to get caps from sample");
-    }
-
-    // get VideoInfo from caps
-    var vid_info = new Gst.Video.Info();
-    if (!vid_info.from_caps((!)caps)) {
-        throw new CaptureError.PARSE_INFO(
-            "failed to parse Gst.Video.Info from caps");
-    }
-
-    // map the above to a map
-    var map_info = Gst.MapInfo();
-    if (!((!)buf).map(out map_info, flags)) {
-        throw new CaptureError.BUFFER_MAP(
-            "failed to map buffer");
-    }
-
-    // GAH. there is a way to add user_data. I just need to figure it out.
-    var pixbuf = new Gdk.Pixbuf.from_data(
-        map_info.data, Gdk.Colorspace.RGB, true, 8, vid_info.width,
-        vid_info.height, vid_info.stride, destroy_buffer, buf);
-
-    return null;
+/**
+ * Errors related to capture.
+ */
+public errordomain CaptureError {
+    UNKNOWN,
+    FOCUS,
+    ALIGN,
+    ZOOM,
+    FLASH,
+    TOO_DARK,
+    QA_FAILED,
+    PULL_SAMPLE,
+    GET_BUFFER,
+    GET_CAPS,
+    PARSE_INFO,
+    BUFFER_MAP,
+    NOT_READY,
 }
 
-} // namespace Gst.Smart
+/**
+ * Just a helper function to create an element. This won't return null (from 
+ * Vala anyway.).
+ *
+ * @throws ElementError.CREATE on failure
+ */
+static Gst.Element
+create_element(string factory_name, string? name = null)
+throws ElementError.CREATE {
+    // try to create our element (this can be null)
+    var maybe_element = Gst.ElementFactory.make(factory_name, name);
+    // type check
+    if (!(maybe_element is Gst.Element)) {
+        throw new ElementError.CREATE(
+            @"could not create \"$(factory_name)\"");
+    }
+    return (!) maybe_element;
+}
+
+/**
+ * Links elements or throws.
+ */
+static void
+link_elements(Gst.Element[] elements) 
+throws ElementError.LINK {
+    // Link all elements verbosely
+    Gst.Element? prev_e = null;
+    foreach (var e in elements) {
+        if (prev_e != null) {
+            var success = ((!)prev_e).link(e);
+            if (!success) {
+                throw new ElementError.LINK(
+                    @"could not link $(((!)prev_e).name) to $(e.name)");
+            }
+        }
+        prev_e = e;
+    }
+}
+
+//  /**
+//   * Link pads a to be and throw on failure.
+//   * 
+//   * @throws ElementError.LINK on failure
+//   */
+//  static void
+//  link_pads_and_check(Gst.Pad a, Gst.Pad b)
+//  throws ElementError.LINK {
+//      var ret = a.link(b);
+//      if (ret != Gst.PadLinkReturn.OK) {
+//          throw new ElementError.LINK(
+//              @"Can't link $(a.parent.name):$(a.name) to $(b.parent.name):$(b.name) because $(ret.to_string())");
+//      }
+//  }
+
+//  /**
+//   * Requests a request pad and check for failure.
+//   */
+//  static Gst.Pad
+//  request_pad_and_check(Gst.Element e, string pad_name)
+//  throws ElementError.PAD {
+//      var maybe_pad = e.get_request_pad(pad_name);
+//      if (maybe_pad == null) {
+//          throw new ElementError.PAD(
+//              @"Could not request pad $(pad_name) from $(e.name)");
+//      }
+//      return (!)maybe_pad;
+//  }
+
+//  /**
+//   * Requests a static pad and check for failure.
+//   */
+//  static Gst.Pad
+//  static_pad_and_check(Gst.Element e, string pad_name)
+//  throws ElementError.PAD {
+//      var maybe_pad = e.get_static_pad(pad_name);
+//      if (maybe_pad == null) {
+//          throw new ElementError.PAD(
+//              @"Could not request pad $(pad_name) from $(e.name)");
+//      }
+//      return (!)maybe_pad;
+//  }
+
+/**
+ * Ghost an existing pad to the outside of a bin as name.
+ *
+ * @param pad the existing pad to ghost
+ * @param bin the bin to ghost to
+ * @param name of the pad to ghost as
+ *
+ * @throws ElementError.GHOST on failure
+ */
+static void
+ghost_existing_pad(Gst.Pad pad, Gst.Bin bin, string name)
+throws ElementError.GHOST {
+    Gst.GhostPad? maybe_ghost = new Gst.GhostPad(name, pad);
+    if (maybe_ghost == null) {
+        throw new ElementError.GHOST(
+            @"Could not create ghost pad from $(pad.parent.name):$(pad.name)");
+    }
+    if (!bin.add_pad((!)maybe_ghost)) {
+        throw new ElementError.GHOST(
+            "could not add queue ghost pad to bin.");
+    }
+}
+
+/**
+ * Create new Gst.Caps with the specified format.
+ * 
+ * @param fmt the GstVideoFormat to use as short string (eg. RGBA)
+ * @param gpu if true, uses memory:NVMM
+ * 
+ * @throws ElementError.CAPS on failure
+ */
+static Gst.Caps
+caps_with_format(string format, bool gpu = false)
+throws ElementError.CAPS {
+    // FIXME(mdegans) use Gst.Video.Format instead
+    string prefix = gpu ? "video/x-raw(memory:NVMM)" : "video/x-raw";
+    var caps_str = @"$(prefix), format=(string)$(format)";
+    var maybe_caps = Gst.Caps.from_string(caps_str);
+    if (maybe_caps == null) {
+        throw new ElementError.CAPS(
+            @"Could not create GstCaps from string: \"$(caps_str)\"");
+    }
+    return (!)maybe_caps;
+}
+
+static string join_string_list(List<string> list, string sep = ", ") {
+    var arr = new string?[list.length()];
+    size_t i = 0;
+    foreach (var s in list) {
+        arr[i] = s;
+        i++;
+    }
+    return string.joinv(", ", arr);
+}
+
+
+//  /**
+//   * Ghost a pad named `name` from an element to the outside of a bin.
+//   *
+//   * @param the element to ghost from
+//   * @param bin the bin to ghost to
+//   * @param name of the pad to ghost
+//   */
+//  static void
+//  ghost_static_pad(Gst.Element e, Gst.Bin bin, string name)
+//  throws ElementError.GHOST {
+//      var maybe_pad = e.get_static_pad(name);
+//      if (maybe_pad == null) {
+//          throw new ElementError.GHOST(
+//              "Could not get sink pad from queue.");
+//      }
+//      var pad = (!) maybe_pad;
+//      ghost_existing_pad(pad, bin, name);
+//  }
+
+public struct Resolution {
+    uint width;
+    uint height;
+}
+
+public struct Point {
+    float x;
+    float y;
+}
+
+public struct Rectangle {
+    Point tl;
+    Point br;
+    public float width { get { return tl.x - br.x; }}
+    public float height  { get { return tl.y - br.y; }}
+}
+
+} // namespace GstSmart

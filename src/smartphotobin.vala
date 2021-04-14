@@ -22,263 +22,467 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
-[CCode (cprefix = "Gst", gir_namespace = "GstSmart", gir_version = "0.1", lower_case_cprefix="gst_")]
-namespace Gst.Smart {
-
-/**
- * General errors for the PhotoBin.
- */
-public errordomain PhotoBinError {
-    BAD_CONFIG,
-}
-
-/**
- * Errors related to capture.
- */
-public errordomain CaptureError {
-    UNKNOWN,
-    TOO_DARK,
-    OUT_OF_FOCUS,
-    QA_FAILED,
-    PULL_SAMPLE,
-    GET_BUFFER,
-    GET_CAPS,
-    PARSE_INFO,
-    BUFFER_MAP,
-}
+namespace GstSmart {
 
 /**
  * Config for PhotoBin.
  */
 public class PhotoBinConfig: Object {
-    /** Path to the quality assurance model */
-    public string qa_model;
-    /** Path to the diagnosis/whatever model */
-    public string dr_model;
-    /** Number of buffers to allow into the queue per capture */
-    public uint num_buffers;
+	public QaDrBinConfig qadr { get; set; default = new QaDrBinConfig(); }
+	public virtual void validate() throws ElementError.CONFIG {
+		this.qadr.validate();
+	}
+}
 
-    construct {
-        qa_model = "";
-        dr_model = "";
-        num_buffers = 10;
-    }
-
-    public virtual bool validate() throws PhotoBinError.BAD_CONFIG {
-        // FIXME(mdegans): check qa model path len, is valid path, and exists
-        // FIXME(mdegans): check dr model path len, is valid path, and exists
-        // FIXME(mdegans): check num buffers is within sane range
-        return true;
-    }
+public struct CaptureConfig {
+	float flash_duration;
+	CaptureConfig() {
+		this.flash_duration = DEFAULT_FLASH_DURATION;
+	}
 }
 
 /**
  * PhotoBin takes a series of buffers in when triggered, chooses the best one,
  * optionally performs in inference on that best one.
  */
-public class PhotoBin: Gst.Bin {
-    /** This bin's configuration */
-    protected PhotoBinConfig config;
-    /** Our input queue */
-    protected Gst.Element queue;
-    /** Prepares buffers for inferences (scales, attaches meta) */
-    protected Gst.Element muxer;
-    // TODO(mdegans): check brightness element (sum pixels / num pixels)
-    // TODO(mdegans): check focus element (possibly from argus, or laplacian)
-    /** Quality assurance inference element */
-    protected Gst.Element infer_qa;
-    /** Diagnosis/whatever infrence element for images that pass QA */
-    protected Gst.Element infer_dr;
-    /** Converts GPU to CPU buffers */
-    protected Gst.Element conv;
-    /** our sink as GstElement */
-    protected Gst.Element sink;
-    /** same as sink, just casted to GstAppSink */
-    protected Gst.App.Sink appsink;
+public class PhotoBin: Gst.Pipeline {
+	/** BEGIN CONSTS */
+	private const uint MAX_REQUESTS = 10;
+	/** END CONSTS */
 
-    /** An internal counter of frames to capture */
-    protected uint frames_to_capture;
+	/** BEGIN PRIVATE CLASSES/STRUCTS */
 
-    static construct {
-        set_static_metadata(
-            "Smart Photo Bin",
-            "Sink/Network",
-            "Sink bin with mpegtsmux, hlssink and an Nginx subprocess.",
-            "Michael de Gans <michael.john.degans@gmail.com>");
+	/** Class for capture requests */
+	private struct Request {
+		public uint id;
+		public CaptureConfig config;
+		public Request(uint id, CaptureConfig config) {
+			this.id = id;
+			this.config = config;
+		}
+	}
 
-        Gst.StaticCaps sink_caps = {
-            (Gst.Caps)null,
-            // FIXME(mdegans): copy nvstreammux caps exactly
-            "video/x-raw(memory:NVMM)",
-        };
+	/** END PRIVATE CLASSES/STRUCTS */
 
-        Gst.StaticPadTemplate sink_pad_template = {
-            "sink",
-            Gst.PadDirection.SINK,
-            Gst.PadPresence.ALWAYS,
-            sink_caps,
-        };
-        add_static_pad_template(sink_pad_template);
-    }
+	/** BEGIN ENUMS */
 
-    construct {
-        // Here the element creation is slightly convoluted since we're using
-        // the experimental nullability checking features. Given the way our
-        // elements are declared above (as Gst.Element and not nullable
-        // Gst.Element?), we need to ensure every element is non-null.
-        // we're using g_assert here to crash if anything in the constructor
-        // fails. We cannot throw from here.
+	enum CaptureStatus {
+		NOT_READY,
+		REQUESTED,
+		FOCUSED,
+		ALIGNED,
+		ZOOMED,
+		READY,
+		CAPTURING,
+		QADR,
+	}
 
-        // create a blank new config
-        this.config = new PhotoBinConfig();
+	/** END ENUMS */
 
-        // create our in queue
-        var maybe_queue = Gst.ElementFactory.make("queue", "queue");
-        assert(maybe_queue != null);
-        // the exclamation mark tells the compiler "this is for sure non-null"
-        this.queue = (!) maybe_queue;
+	/** BEGIN MEMBER VARIABLES */
 
-        // create our muxer.
-        var maybe_muxer = Gst.ElementFactory.make(MUXER_ELEMENT, "muxer");
-        assert(maybe_muxer != null);
-        this.muxer = (!) maybe_muxer;
+	/** Our camera source */
+	private dynamic Gst.Element camera;
+	/** Our control element */
+	private dynamic Gst.Element ptzf;
+	/** Cached state of ptzf.focused */
+	private bool cached_ptzf_focused = false;
+	/** Cached state of ptzf.aligned */
+	private bool cached_ptzf_aligned = false;
+	/** Cached state of ptzf.zoomed */
+	private bool cached_ptzf_zoomed = false;
+	/** Cached state of ptzf.capture_ready */
+	private bool cached_ptzf_capture_ready = false;
+	//  private dynamic Gst.Element flash;
 
-        // create our quality assurance inference element
-        var maybe_infer_qa = Gst.ElementFactory.make(
-            INFERENCE_ELEMENT, "infer_qa");
-        assert(maybe_infer_qa != null);
-        this.infer_qa = (!) maybe_infer_qa;
+	/** A tee to split the pipeline */
+	private Gst.Element tee;
+	/** A Queue for the display branch */
+	private Gst.Element display_q;
+	/** Nvidia EGL transform element */
+	private Gst.Element egl_tx;
+	/** Nvidia EGL display element, provides GstVideoOverlay interface */
+	private Gst.Element egl_display;
+	/** The GstVideoOverlay interface to use for GUI stuff */
+	public Gst.Video.Overlay overlay;
 
-        // create our diagnosis/whatever inference element
-        var maybe_infer_dr = Gst.ElementFactory.make(
-            INFERENCE_ELEMENT, "infer_dr");
-        assert(maybe_infer_dr != null);
-        this.infer_dr = (!) maybe_infer_dr;
+	/** A Queue for the inference brahch */
+	private Gst.Element infer_q;
+	/** Our Quality Assurace and Diagnostics bin */
+	private QaDrBin qadr;
+	/** Converter to CPU buffer */
+	private Gst.Element sink_conv;
+	/** Appsink as Gst.Element */
+	private Gst.Element sink;
 
-        // create our converter
-        var maybe_conv = Gst.ElementFactory.make(
-            CONVERSION_ELEMENT, "conv");
-        assert(maybe_conv != null);
-        this.conv = (!) maybe_conv;
-
-        // create our appsink to get images out of this pipeline
-        var maybe_appsink = Gst.ElementFactory.make("appsink", "appsink");
-        assert(maybe_appsink != null);
-        if (maybe_appsink is Gst.App.Sink) {
-            this.sink = (Gst.Element) maybe_appsink;
-            this.appsink = (Gst.App.Sink) maybe_appsink;
-        } else {
-            // this should never happen unless the GStreamer install is borked
-            error("appsink was somehow not a GstAppSink");
-        }
-
-        // a handy temorary array of all our elements
-        Gst.Element[] elements = {
-            this.queue,
-            this.muxer,
-            this.infer_qa,
-            this.infer_dr,
-            this.conv,
-            this.sink,
-        };
-
-        // add them all to self
-        foreach (var e in elements) {
-            assert(this.add(e));
-        }
-
-        // link all elements
-        assert(this.queue.link_many(this.muxer, this.infer_qa, this.infer_dr,
-            this.conv, this.sink));
-        
-        // Get a sink pad from the muxer and ghost it to this bin
-        var muxer_sink = muxer.get_request_pad("sink_0");
-        if (muxer_sink is Gst.Pad) {
-            var ghost_sink = new Gst.GhostPad("sink", (!)muxer_sink);
-            assert(this.add_pad(ghost_sink));
-        } else {
-            error(@"could not get sink pad from $(muxer.name)");
-        }
-    }
-
-    /**
-     * Create a PhotoBin with an optional name.
-     */
-    public PhotoBin(PhotoBinConfig? config = null, string? name = null)
-    throws PhotoBinError.BAD_CONFIG {
-        if (config != null) {
-            this.config = (!) config;
-            this.config.validate();
-        }
-        if (name != null) {
-            this.name = (!) name;
-        }
-    }
-
-    /** CALLBACKS */
-
-    /**
-     * A {@link Gst.PadProbeCallback} that drops buffers while frames_to_capture
-     * is zero. Decrements frames_to_capture while holding it's lock.
-     */
-    public virtual Gst.PadProbeReturn
-    on_queue_sink_buffer(Gst.Pad _, Gst.PadProbeInfo __) {
-        lock (this.frames_to_capture) {
-            if (this.frames_to_capture != 0) {
-                // check something didn't go very wrong and we wrapped around
-                assert(this.frames_to_capture < 100000000);
-                // decrement and let the buffer through
-                this.frames_to_capture -= 1;
-                return Gst.PadProbeReturn.OK;
-            }
-            return Gst.PadProbeReturn.DROP;
-        }
-    }
+	/** Capture ID of the next capture */
+	private uint capture_id = 0;
+	/** Allow this many buffers through to the QADR queue */
+	private int allow_buffers = 0;
+	/** Whether we're prerolling */
+	private bool prerolling = true;
+	/** Queue for capture requests */
+	private Queue<Request?> requests;
+	/** If flash needs to be fired, and for how long in frames*/
+	private float fire_flash_for = 0.0f;
 
 
-    /** END CALLBACKS */
+	/** END MEMBER VARIABLES */
 
-    public virtual Gdk.Pixbuf?
-    capture() throws CaptureError {
-        // reset frames_to_capture which will let num_buffers through, though
-        // not all of them will reach the appsink.
-        lock(this.frames_to_capture) {
-            this.frames_to_capture = this.config.num_buffers;
-        }
+	/** BEGIN GOBJECT PROPERTIES */
 
-        // la la la, we wait for stuff
+	/** Our sink as GstAppSink, NULL is checked for. */
+	[Description(
+		nick = "appsink",
+		blurb = "GstAppSink for buffers that pass QA.")]
+	public Gst.App.Sink appsink {
+		get {
+			var ret = this.sink as Gst.App.Sink;
+			assert(ret != null);
+			return (!)ret;
+		}
+	}
 
-        // some bindings here are actually wrong. The docs say, that this
-        // return is nullable, so we cast to that and check for null.
-        var sample = (Gst.Sample?)this.appsink.pull_sample();
-        if (sample == null) {
-            throw new CaptureError.PULL_SAMPLE(
-                @"Failed to pull sample from $(this.appsink.name)");
-        }
+	/** Our configuration */
+	private PhotoBinConfig _config;
+	[Description(
+		nick = "Config",
+		blurb = "Configuration. Validate before or this element will panic.")]
+	PhotoBinConfig config {
+		get {
+			return this._config;
+		}
+		set {
+			try {
+				value.validate();
+			} catch (ElementError.CONFIG e) {
+				// We panic here because it's probably a programmer error.
+				// Programmer should validate the config before setting, parse
+				// any GError and have the end user fix it.
+				error(
+					@"Could not set config on $(this.name) because: $(e.message)");
+			}
+			this._config = value;
+			this.qadr.config = value.qadr;
+		}
+	}
 
+	/** Element status. */
+	[Description(
+		nick = "Status",
+		blurb = "The capture status of this elmeent.")]
+	CaptureStatus status {
+		get; private set; default = CaptureStatus.NOT_READY; }
 
-        return null;
-    }
+	/** Whether we're capturing or not. lock(capturing) on write. */
+	[Description(
+		nick = "Capturing",
+		blurb = "Whether we're capturing or not.")]
+	bool capturing { get; private set; default = false; }
 
-    //TODO(mdegans): async capture method
-    public virtual async Gdk.Pixbuf?
-    capture_async() throws CaptureError {
-        this.appsink.set_emit_signals(true);
+	static construct {
+		set_static_metadata(
+			"Smart Photo Bin",
+			"Sink/Network",
+			"Top level pipeline for libazabache.",
+			"Michael de Gans <michael.john.degans@gmail.com>");
 
-        lock(this.frames_to_capture) {
-            this.frames_to_capture= this.config.num_buffers;
-        }
+		// This element is a top-level pipeline and has no pads, which would
+		// otherwise go here.
+	}
 
-        // some bindings here are actually wrong. The docs say, that this
-        // return is nullable, so we cast to that and check for null.
-        var sample = (Gst.Sample?) yield this.appsink.pull_sample();
-        if (sample == null) {
-            throw new CaptureError.PULL_SAMPLE(
-                @"Failed to pull sample from $(this.appsink.name)");
-        }
+	/** END GOBJECT PROPERTIES */
 
-        return null;
-    }
+	construct {
+		try {
+			// create our elements (or panic)
+			this.camera = create_element("nvmanualcamerasrc", "camera");
+			this.ptzf = create_element("ptzf", "ptzf");
+			this.tee = create_element("tee", "tee");
+
+			this.display_q = create_element("queue", "display_q");
+			this.egl_tx = create_element("nvegltransform", "egl_tx");
+			this.egl_display = create_element("nveglglessink", "egl_display");
+			var maybe_overlay = this.egl_display as Gst.Video.Overlay;
+			if (maybe_overlay == null) {
+				error("`nveglglessink` has broken GstVideoOverlay interface.");
+			}
+			this.overlay = (!)maybe_overlay;
+
+			this.infer_q = create_element("queue", "infer_q");
+			this.qadr = new QaDrBin(null, "qa");
+			this.sink_conv = create_element("nvvidconv", "sink_conv");
+			this.sink = create_element("appsink", "sink");
+		} catch (ElementError.CREATE e) {
+			error(e.message);
+		}
+
+		// a handy temorary array of all our elements
+		Gst.Element[] elements = {
+			this.camera,
+			this.ptzf,
+			this.tee,
+
+			this.display_q,
+			this.egl_tx,
+			this.egl_display,
+
+			this.infer_q,
+			this.qadr,
+			this.sink_conv,
+			this.sink,
+		};
+
+		// add them all to self
+		foreach (var e in elements) {
+			if (!this.add((!)e)) {
+				error(@"could not add $(((!)e).name) to $(this.name)");
+			}
+		}
+
+		// Turn camera metadata on.
+		this.camera.bayer_sharpness_map = true;
+		this.camera.metadata = true;
+		// Configure ptzf
+		// FIXME(mdegans): configure ptzf here, provide getters/setters
+		// Set RGBA caps on appsink (built in capsfilter)
+		// make sure appsink emites signals
+
+		this.config = new PhotoBinConfig();
+
+		// setup appsink
+		try {
+			this.appsink.set_caps(caps_with_format("RGBA"));
+		} catch (ElementError.CAPS e) {
+			error(e.message);
+		}
+		this.appsink.emit_signals = true;
+		this.appsink.new_sample.connect(this.on_new_sample);
+
+		// link all elements
+		try {
+			// link the beginning of the pipeline
+			link_elements({this.camera, this.ptzf, this.tee});
+
+			// link the tee to the queues
+			link_elements({this.tee, this.display_q});
+			link_elements({this.tee, this.infer_q});
+
+			// link the display branch
+			link_elements({this.display_q, this.egl_tx, this.egl_display});
+
+			// link the inference / appsink branch
+			link_elements({this.infer_q, this.qadr, this.sink_conv, this.sink});
+		} catch (ElementError.LINK e) {
+			error(e.message);
+		}
+
+		// Connect any callbacks
+		// TODO(mdegans): these 4 below can probably be refactored into a single
+		//  closure.
+		this.ptzf.notify["focused"].connect((_, pspec) => {
+			debug(@"$(pspec.name) emitted from $(this.ptzf.name)");
+			// get focused as boolean
+			bool current_focused = this.ptzf.focused;
+			// if it's not the same as our cached value, update it and emit
+			// the `focused` signal.
+			if (current_focused != this.cached_ptzf_focused) {
+				this.cached_ptzf_focused = current_focused;
+				focused(current_focused);
+			}
+		});
+		this.ptzf.notify["aligned"].connect((_, pspec) => {
+			debug(@"$(pspec.name) emitted from $(this.ptzf.name)");
+			// get focused as boolean
+			bool current_aligned = this.ptzf.aligned;
+			// if it's not the same as our cached value, update it and emit
+			// the `focused` signal.
+			if (current_aligned != this.cached_ptzf_aligned) {
+				this.cached_ptzf_aligned = current_aligned;
+				aligned(current_aligned);
+			}
+		});
+		this.ptzf.notify["zoomed"].connect((_, pspec) => {
+			debug(@"$(pspec.name) emitted from $(this.ptzf.name)");
+			// get focused as boolean
+			bool current_zoomed = this.ptzf.zoomed;
+			// if it's not the same as our cached value, update it and emit
+			// the `focused` signal.
+			if (current_zoomed != this.cached_ptzf_focused) {
+				this.cached_ptzf_zoomed = current_zoomed;
+				zoomed(current_zoomed);
+			}
+		});
+		this.ptzf.notify["capture-ready"].connect((_, pspec) => {
+			debug(@"$(pspec.name) emitted from $(this.ptzf.name)");
+			// get focused as boolean
+			bool current_capture_ready = this.ptzf.capture_ready;
+			// if it's not the same as our cached value, update it and emit
+			// the `focused` signal.
+			if (current_capture_ready != this.cached_ptzf_capture_ready) {
+				this.cached_ptzf_capture_ready = current_capture_ready;
+				capture_ready(current_capture_ready);
+			}
+		});
+		// connect pad probe callback to drop buffers if not ready
+		var maybe_infer_q_sink = this.infer_q.get_static_pad("sink");
+		assert(maybe_infer_q_sink is Gst.Pad);
+		var infer_q_sink = (!)maybe_infer_q_sink;
+		infer_q_sink.add_probe(Gst.PadProbeType.BUFFER, this.on_infer_q_buf);
+	}
+
+	/**
+	 * Create a PhotoBin with an optional config and name.
+	 */
+	public PhotoBin(PhotoBinConfig? config = null,
+					string? name = null) {
+		if (config != null) {
+			this.config = (!)config;
+		}
+		if (name != null) {
+			this.name = (!)name;
+		}
+	}
+
+	/** BEGIN CALLBACKS */
+
+	/** Emits the above `new-buffer` on an appsink `new-sample` */
+	private Gst.FlowReturn on_new_sample(Gst.Element _) {
+		Gst.Sample? maybe_sample = this.appsink.pull_sample();
+		if (maybe_sample == null) {
+			capture_failure(
+				@"Could not pull sample from $(this.name):$(this.sink.name).");
+			return Gst.FlowReturn.ERROR;
+		}
+		var maybe_buf = ((!)maybe_sample).get_buffer();
+		if (maybe_buf == null) {
+			capture_failure(@"Could not get buffer from sample.");
+			return Gst.FlowReturn.ERROR;
+		}
+		capture_success((!)maybe_buf);
+		return Gst.FlowReturn.OK;
+	}
+
+	/** Controls buffer flow into the infer_q for QA and DR */
+	private Gst.PadProbeReturn
+	on_infer_q_buf(Gst.Pad pad, Gst.PadProbeInfo info) {
+		// if we're prerolling, we need to let buffers through;
+		if (this.prerolling) {
+			return Gst.PadProbeReturn.OK;
+		}
+		lock (this.allow_buffers) {
+			if (this.allow_buffers > 0) {
+				this.allow_buffers--;
+				return Gst.PadProbeReturn.OK;
+			} else {
+				// drop the buffer
+				return Gst.PadProbeReturn.DROP;
+			}
+		}
+	}
+
+	/** Called when a capture is requested and ptzf reports capture ready */
+	private void
+	on_capture_ready(Request request) {
+		// the general strategy here is to fire the flash, synchronized with a 
+		// buffer, let some buffers through, and have qadr pick the brighest.
+		lock (this.allow_buffers) {
+			this.allow_buffers = 10;
+		}
+		this.fire_flash_for = request.config.flash_duration;
+	}
+
+	/** END CALLBACKS */
+
+	/** BEGIN SIGNALS */
+
+	/** Signal emitted when focus is (really) changed */
+	[Signal(no_recurse = "true")]
+	public virtual signal void focused(bool is_focused) {
+		if (is_focused) {
+			this.status = CaptureStatus.FOCUSED;
+			debug(@"Focused.");
+		} else {
+			debug("No longer in focus.");
+		}
+	}
+
+	/** Signal emitted when alignment is (really) changed */
+	[Signal(no_recurse = "true")]
+	public virtual signal void aligned(bool is_aligned) {
+		if (is_aligned) {
+			this.status = CaptureStatus.ALIGNED;
+			debug(@"Aligned");
+		} else {
+			debug("No longer aligned.");
+		}
+	}
+
+	/** Signal emitted when we're zoomed into an eye */
+	[Signal(no_recurse = "true")]
+	public virtual signal void zoomed(bool is_zoomed) {
+		if (is_zoomed) {
+			// TODO(mdegans): implement eye]
+			this.status = CaptureStatus.ZOOMED;
+			debug("Zoomed into eye");
+		} else {
+			debug("No longer zoomed in.");
+		}
+	}
+
+	/** Signal emitted when capture_ready state is changed */
+	[Signal(no_recurse="true")]
+	public virtual signal void capture_ready(bool is_ready) {
+		if (is_ready) {
+			this.status = CaptureStatus.READY;
+			debug("Ptzf ready for capture.");
+			// Let buffers through to the QADR queue and notify that flash
+			// needs to be fired, sychronized with the next buffer.
+			lock(this.requests) {
+				// *pop* the last request from the queue, since ptzf is done
+				// working and we're ready to do the rest of the capture
+				// ourselves.
+				var maybe_request = this.requests.pop_tail();
+				if (maybe_request == null) {
+					warning("Logic Error somewhere. Popped Request was NULL.");
+				} else {
+					on_capture_ready((!)maybe_request);
+				}
+			}
+		} else {
+			debug("No longer ready for capture.");
+		}
+	}
+
+	/** Signal emitted when capture fails */
+	[Signal(no_recurse="true")]
+	public virtual signal void capture_failure(string reason) {
+		debug(@"Capture ID $(this.capture_id) failed because: $(reason)");
+	}
+
+	/** Signal emitted when a new buffer reaches the appsink */
+	[Signal(no_recurse="true")]
+	public virtual signal void capture_success(Gst.Buffer buf) {
+		debug("Buffer passed QA and is ready at the appsink!");
+	}
+
+	/** END SIGNALS */
+
+	/** BEGIN METHODS */
+
+	/**
+	 * Trigger a capture.
+	 */
+	public void capture(CaptureConfig config) {
+		lock(this.requests) {
+			if (this.requests.length > MAX_REQUESTS) {
+				capture_failure(@"Too many requests (>$(MAX_REQUESTS))");
+			}
+			this.requests.push_tail(Request(this.capture_id++, config));
+		}
+	}
+
+	/** END METHODS */
 }
 
-} // namespace Gst.Smart
+} // namespace GstSmart

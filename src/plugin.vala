@@ -38,18 +38,31 @@ const Gst.PluginDesc gst_plugin_desc = {
 };
 
 public static bool plugin_init(Gst.Plugin p) {
-	Gst.Element.register(
-		p,
-		"smartphotobin",
-		Gst.Rank.NONE,
-		typeof(Gst.Smart.PhotoBin)
+	return (
+		Gst.Element.register(
+			p,
+			"smartphotobin",
+			Gst.Rank.NONE,
+			typeof(GstSmart.PhotoBin)
+		) &&
+		Gst.Element.register(
+			p,
+			"qadrbin",
+			Gst.Rank.NONE,
+			typeof(GstSmart.QaDrBin)
+		)
 	);
-	return true;
 }
 
+[CCode (
+	cprefix = "GstSmart",
+	gir_namespace = "GstSmart",
+	gir_version = "@gir_version@",
+	lower_case_cprefix="gst_smart_",
+	cheader_filename="smartphotobin.h")]
+namespace GstSmart {
 
-[CCode (cprefix = "Gst", gir_namespace = "GstSmart", gir_version = "0.1", lower_case_cprefix="gst_")]
-namespace Gst.Smart {
+// Defaults for GstSmart.PhotoBin
 
 /** Inference Element name */
 public const string INFERENCE_ELEMENT = "nvinfer";
@@ -57,5 +70,14 @@ public const string INFERENCE_ELEMENT = "nvinfer";
 public const string CONVERSION_ELEMENT = "nvvideoconvert";
 /** Muxer elemetn name (preps images for inference) */
 public const string MUXER_ELEMENT = "nvstreammux";
+/** Duration flash will be fired for in frames */
+public const float DEFAULT_FLASH_DURATION = 1.0f;
+
+// Defaults for GstSmart.QaDrBin
+
+/** Default Quality Assurance model */
+public const string DEFAULT_QA_MODEL = "@DEFAULT_QA_MODEL@";
+/** Default Diagnosis/Whatever model */
+public const string DEFAULT_DR_MODEL = "@DEFAULT_DR_MODEL@";
 
 }
