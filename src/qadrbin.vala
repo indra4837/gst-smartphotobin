@@ -108,11 +108,17 @@ public class QaDrBin: Gst.Bin {
 			this.muxer.height = config.model_res.height;
 		}
 	}
+	
+
+	// child elements
 
 	private dynamic Gst.Element muxer;
 	private dynamic Gst.Element qa;
 	private dynamic Gst.Element dr;
 	private dynamic Gst.Element demux;
+
+	/** Used when prerolling to let all buffers through */
+	private bool disable_qa = true;
 
 	static construct {
 		set_static_metadata(
@@ -235,12 +241,19 @@ public class QaDrBin: Gst.Bin {
 		}
 	}
 
+
+	/** BEGIN_CALLBACKS */
+
 	/**
 	 * Callback to do preliminary QA check. Checks for minimum sharpness and 
 	 * brightness. Drops the buffer if any of these checks fail.
 	 */
 	protected virtual Gst.PadProbeReturn
 	on_queue_src_buffer(Gst.Pad pad, Gst.PadProbeInfo info) {
+		if (this.disable_qa) {
+			// we're prerolling -- let the buffer through
+			return Gst.PadProbeReturn.OK;
+		}
 		// Check we have a buffer attached to info. Really this is probably not
 		// necessary but the non-null checking encourages us to do this.
 		var maybe_buf = info.get_buffer();
@@ -277,6 +290,32 @@ public class QaDrBin: Gst.Bin {
 
 		return Gst.PadProbeReturn.OK;
 	}
+
+	/** END_CALLBACKS */
+
+	/** OVERRIDES BEGIN */
+
+	/**
+	 * Called when state is changed. This implementation chains up, then stores
+	 * a flag so buffer probes know to not perform QA when prerolling.
+	 */
+	public override void
+	state_changed(Gst.State old, Gst.State current, Gst.State pending) {
+		// chain up
+		base.state_changed(old, current, pending);
+		// if we're not yet in the playing state, we should disable QA.
+		// otherwise QA will never complete.
+		if (current < Gst.State.PLAYING) {
+			debug("We're prerolling still. QA is disabled.");
+			this.disable_qa = true;
+		} else {
+			debug("We're done prerolling. QA is enabled.");
+			this.disable_qa = false;
+		}
+	}
+
+	/** OVERRIDES END */
+
 }
 
 } // namespace GstSmart
