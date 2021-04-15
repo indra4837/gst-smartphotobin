@@ -4,3 +4,5 @@ gst_smartphotobin_incdirs = [
     gst_smartphotobin_private_incdir,
     gst_smartphotobin_public_incdir,
 ]
+
+# TODO(mdegans): install_headers ?

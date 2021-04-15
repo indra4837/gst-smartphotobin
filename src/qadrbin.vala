@@ -27,12 +27,12 @@ namespace GstSmart {
 // C++ stuff we'll use in this file
 [CCode (cname = "nvmanualcam_get_lux")]
 static extern float nvmanualcam_get_lux(Gst.Buffer buf);
-[CCode (cname = "nvmanualcam_get_sharpness")]
-static extern float nvmanualcam_get_sharpness(Gst.Buffer buf,
-									   float left,
-									   float top,
-									   float right,
-									   float bottom);
+//  [CCode (cname = "nvmanualcam_get_sharpness")]
+//  static extern float nvmanualcam_get_sharpness(Gst.Buffer buf,
+//  									   float left,
+//  									   float top,
+//  									   float right,
+//  									   float bottom);
 [CCode (cname = "nvmanualcam_destroy_meta")]
 static extern bool nvmanualcam_destroy_meta(Gst.Buffer buf);
 
@@ -63,7 +63,7 @@ public class QaDrBinConfig: Object {
 	/** Minimum sharpness score */
 	public float min_sharpness { get; set; default = -1.0f; }
 	/** Sharpness Region of Interest */
-	public Rectangle sharpness_roi { get; set; }
+	//  public Rect sharpness_roi { get; set; }
 
 	public virtual void validate() throws ElementError.CONFIG {
 		var errors = new List<string>();
@@ -254,14 +254,20 @@ public class QaDrBin: Gst.Bin {
 			return Gst.PadProbeReturn.DROP;
 		}
 
-		float sharpness = nvmanualcam_get_sharpness(buf,
-			   this.config.sharpness_roi.tl.x,
-			   this.config.sharpness_roi.tl.y,
-			   this.config.sharpness_roi.br.x,
-			   this.config.sharpness_roi.br.y);
-		if (sharpness < this.config.min_sharpness) {
-			return Gst.PadProbeReturn.DROP;
-		}
+		// TODO(mdegans): for this to work properly we need to get the roi used 
+		//  for the upstream buffer. That's probably easiest to do if we write
+		//  the metadata upstream in vala and grab it here. Using a GObject
+		//  property/signals to update it would introduce a race condition where
+		//  the focus ROI could be different here than upstream.
+
+		//  float sharpness = nvmanualcam_get_sharpness(buf,
+		//  	this.config.sharpness_roi.x,
+		//  	this.config.sharpness_roi.y,
+		//  	this.config.sharpness_roi.x + this.config.sharpness_roi.width,
+		//  	this.config.sharpness_roi.y + this.config.sharpness_roi.height);
+		//  if (sharpness < this.config.min_sharpness) {
+		//  	return Gst.PadProbeReturn.DROP;
+		//  }
 
 		// some nvidia elements choke on custom metadata on some version of JP,
 		// so we'll strip it.
