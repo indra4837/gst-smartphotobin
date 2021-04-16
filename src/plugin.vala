@@ -72,6 +72,10 @@ public const string CONVERSION_ELEMENT = "nvvideoconvert";
 public const string MUXER_ELEMENT = "nvstreammux";
 /** Duration flash will be fired for in frames */
 public const float DEFAULT_FLASH_DURATION = 1.0f;
+/** Default bayer gains (white balance) for nvmanualcamerasrc */
+public const BayerGains DEFAULT_BAYER_GAINS = {
+	1.0f, 1.0f, 1.0f, 1.0f
+};
 
 // Defaults for GstSmart.QaDrBin
 

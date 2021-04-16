@@ -34,10 +34,57 @@ public class PhotoBinConfig: Object {
 	}
 }
 
+public enum Eye {
+	RIGHT,
+	LEFT,
+}
+
+public struct BayerGains {
+	float r;
+	float g_even;
+	float g_odd;
+	float b;
+	BayerGains() {
+		r = DEFAULT_BAYER_GAINS.r;
+		g_even = DEFAULT_BAYER_GAINS.g_even;
+		g_odd = DEFAULT_BAYER_GAINS.g_odd;
+		b = DEFAULT_BAYER_GAINS.b;
+	}
+}
+
+public struct FlashConfig {
+	float delay;
+	uint offset;
+	float duration;
+	float overlap;
+	float brightness;
+	FlashConfig() {
+		delay = 0.0f;
+		offset = 0;
+		duration = 1.0f;
+		overlap = 0.25f;
+		brightness = 1.0f;
+	}
+}
+
+static uint CaptureConfig_id_counter;
+static Mutex CaptureConfig_id_counter_mx;
 public struct CaptureConfig {
-	float flash_duration;
+	FlashConfig flash;
+	float exposure;
+	float gain;
+	BayerGains wb;
+	Eye eye;
+	uint id;
 	CaptureConfig() {
-		this.flash_duration = DEFAULT_FLASH_DURATION;
+		flash = FlashConfig();
+		exposure = 1.0f;
+		gain = 1.0f;
+		wb = BayerGains();
+		eye = Eye.LEFT;
+		CaptureConfig_id_counter_mx.lock();
+		id = CaptureConfig_id_counter++;
+		CaptureConfig_id_counter_mx.unlock();
 	}
 }
 
@@ -54,10 +101,8 @@ public class PhotoBin: Gst.Pipeline {
 
 	/** Class for capture requests */
 	private struct Request {
-		public uint id;
 		public CaptureConfig config;
-		public Request(uint id, CaptureConfig config) {
-			this.id = id;
+		public Request(CaptureConfig config) {
 			this.config = config;
 		}
 	}
@@ -359,7 +404,7 @@ public class PhotoBin: Gst.Pipeline {
 			capture_failure(@"Could not get buffer from sample.");
 			return Gst.FlowReturn.ERROR;
 		}
-		capture_success((!)maybe_buf);
+		capture_success((!)maybe_buf, this.appsink.caps);
 		return Gst.FlowReturn.OK;
 	}
 
@@ -389,7 +434,7 @@ public class PhotoBin: Gst.Pipeline {
 		lock (this.allow_buffers) {
 			this.allow_buffers = 10;
 		}
-		this.fire_flash_for = request.config.flash_duration;
+		this.fire_flash_for = request.config.flash.duration;
 	}
 
 	/** END CALLBACKS */
@@ -462,7 +507,7 @@ public class PhotoBin: Gst.Pipeline {
 
 	/** Signal emitted when a new buffer reaches the appsink */
 	[Signal(no_recurse="true")]
-	public virtual signal void capture_success(Gst.Buffer buf) {
+	public virtual signal void capture_success(Gst.Buffer buf, Gst.Caps caps) {
 		debug("Buffer passed QA and is ready at the appsink!");
 	}
 
@@ -478,7 +523,7 @@ public class PhotoBin: Gst.Pipeline {
 			if (this.requests.length > MAX_REQUESTS) {
 				capture_failure(@"Too many requests (>$(MAX_REQUESTS))");
 			}
-			this.requests.push_tail(Request(this.capture_id++, config));
+			this.requests.push_tail(Request(config));
 		}
 	}
 
