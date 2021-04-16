@@ -44,7 +44,7 @@ public struct BayerGains {
 	float g_even;
 	float g_odd;
 	float b;
-	BayerGains() {
+	public BayerGains() {
 		r = DEFAULT_BAYER_GAINS.r;
 		g_even = DEFAULT_BAYER_GAINS.g_even;
 		g_odd = DEFAULT_BAYER_GAINS.g_odd;
@@ -58,7 +58,7 @@ public struct FlashConfig {
 	float duration;
 	float overlap;
 	float brightness;
-	FlashConfig() {
+	public FlashConfig() {
 		delay = 0.0f;
 		offset = 0;
 		duration = 1.0f;
@@ -76,7 +76,7 @@ public struct CaptureConfig {
 	BayerGains wb;
 	Eye eye;
 	uint id;
-	CaptureConfig() {
+	public CaptureConfig() {
 		flash = FlashConfig();
 		exposure = 1.0f;
 		gain = 1.0f;
