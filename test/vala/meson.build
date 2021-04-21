@@ -28,13 +28,20 @@ tests = [
     'sources': ['test_gui.vala'],
     'suites': ['interactive'],
     'extra_deps': [
-      dependency('gtk+-3.0'),
+      dependency('gtk+-3.0', required: false),
     ],
   },
 ]
 
 # build tests (and optionally execute them)
 foreach t: tests
+  foreach dep: t['extra_deps']
+    if not dep.found()
+      warning(
+        'not building ' + t['description'] + ' because '
+        + dep.name() + ' not found')
+    endif
+  endforeach
   exe = executable(t['filename'], t['sources'],
     dependencies: [
         gst_smartphotobin_dep,
