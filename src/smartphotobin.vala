@@ -168,8 +168,8 @@ public class PhotoBin: Gst.Pipeline {
 	private bool prerolling = true;
 	/** Queue for capture requests */
 	private Queue<Request?> requests;
-	/** If flash needs to be fired, and for how long in frames*/
-	private float fire_flash_for = 0.0f;
+	/** If flash needs to be fired, and with what config */
+	private FlashConfig? flash_config = null;
 
 
 	/** END MEMBER VARIABLES */
@@ -322,9 +322,10 @@ public class PhotoBin: Gst.Pipeline {
 			error(e.message);
 		}
 
-		// Connect any callbacks
+		// Connect any callbacks. 
 		// TODO(mdegans): these 4 below can probably be refactored into a single
-		//  closure.
+		//  closure. 
+		// These forward ptzf property changes to signals on this element.
 		this.ptzf.notify["focused"].connect((_, pspec) => {
 			debug(@"$(pspec.name) emitted from $(this.ptzf.name)");
 			// get focused as boolean
@@ -374,6 +375,14 @@ public class PhotoBin: Gst.Pipeline {
 		assert(maybe_infer_q_sink is Gst.Pad);
 		var infer_q_sink = (!)maybe_infer_q_sink;
 		infer_q_sink.add_probe(Gst.PadProbeType.BUFFER, this.on_infer_q_buf);
+		// connect pad probe to fire the flash. This needs to happen at the
+		// source so it can be on the border of a frame. Syncronization cannot
+		// be guaranteed because of how the argus *source* works (the lib has
+		// better support, but we can get close enough here)
+		var maybe_camera_src = this.camera.get_static_pad("src");
+		assert(maybe_camera_src is Gst.Pad);
+		var camera_src = (!)maybe_camera_src;
+		camera_src.add_probe(Gst.PadProbeType.BUFFER, on_camera_buf);
 	}
 
 	/**
@@ -390,6 +399,18 @@ public class PhotoBin: Gst.Pipeline {
 	}
 
 	/** BEGIN CALLBACKS */
+
+	/** A pad callback for the camera elment to fire the flash. */
+	private Gst.PadProbeReturn
+	on_camera_buf(Gst.Pad pad, Gst.PadProbeInfo info) {
+		if (this.flash_config != null) {
+			var conf = (!)this.flash_config;
+			this.flash_config = null;
+			var maybe_buf = info.get_buffer();
+			flash_fire((!)maybe_buf, conf);
+		}
+		return Gst.PadProbeReturn.OK;
+	}
 
 	/** Emits the above `new-buffer` on an appsink `new-sample` */
 	private Gst.FlowReturn on_new_sample(Gst.Element _) {
@@ -432,9 +453,11 @@ public class PhotoBin: Gst.Pipeline {
 		// the general strategy here is to fire the flash, synchronized with a 
 		// buffer, let some buffers through, and have qadr pick the brighest.
 		lock (this.allow_buffers) {
-			this.allow_buffers = 10;
+			this.allow_buffers = 5;
 		}
-		this.fire_flash_for = request.config.flash.duration;
+		lock (this.flash_config) {
+			this.flash_config = request.config.flash;
+		}
 	}
 
 	/** END CALLBACKS */
@@ -489,7 +512,7 @@ public class PhotoBin: Gst.Pipeline {
 				// ourselves.
 				var maybe_request = this.requests.pop_tail();
 				if (maybe_request == null) {
-					warning("Logic Error somewhere. Popped Request was NULL.");
+					error("Logic error somewhere. Popped Request was NULL.");
 				} else {
 					on_capture_ready((!)maybe_request);
 				}
@@ -511,17 +534,24 @@ public class PhotoBin: Gst.Pipeline {
 		debug("Buffer passed QA and is ready at the appsink!");
 	}
 
+	/** Handle when flash needs to be fired. Handlers should not block. */
+	[Signal(no_recurse="true")]
+	public virtual signal void flash_fire(Gst.Buffer buf, FlashConfig config) {
+		debug("Signaling flash-fire!");
+	}
+
 	/** END SIGNALS */
 
 	/** BEGIN METHODS */
 
 	/**
-	 * Trigger a capture.
+	 * Request a capture.
 	 */
 	public void capture(CaptureConfig config) {
 		lock(this.requests) {
 			if (this.requests.length > MAX_REQUESTS) {
-				capture_failure(@"Too many requests (>$(MAX_REQUESTS))");
+				capture_failure(
+					@"Too many requests pending (> $(MAX_REQUESTS))");
 			}
 			this.requests.push_tail(Request(config));
 		}
