@@ -28,6 +28,8 @@ namespace GstSmart {
  * Config for PhotoBin.
  */
 public class PhotoBinConfig: Object {
+	public int sensor_id { get; set; default = 0; }
+	public int sensor_mode { get; set; default = -1; }
 	public QaDrBinConfig qadr { get; set; default = new QaDrBinConfig(); }
 	public virtual void validate() throws ElementError.CONFIG {
 		this.qadr.validate();
@@ -118,7 +120,6 @@ public class PhotoBin: Gst.Pipeline {
 		ALIGNED,
 		ZOOMED,
 		READY,
-		CAPTURING,
 		QADR,
 	}
 
@@ -166,9 +167,7 @@ public class PhotoBin: Gst.Pipeline {
 	private int allow_buffers = 0;
 	/** Whether we're prerolling */
 	private bool prerolling = true;
-	/** Queue for capture requests */
-	private Queue<Request?> requests;
-	/** If flash needs to be fired, and with what config */
+	/** If flash firing is needed. This is it's config. */
 	private FlashConfig? flash_config = null;
 
 
@@ -209,6 +208,8 @@ public class PhotoBin: Gst.Pipeline {
 			}
 			this._config = value;
 			this.qadr.config = value.qadr;
+			this.camera.sensor_id = value.sensor_id;
+			this.camera.sensor_mode = value.sensor_mode;
 		}
 	}
 
@@ -219,7 +220,7 @@ public class PhotoBin: Gst.Pipeline {
 	CaptureStatus status {
 		get; private set; default = CaptureStatus.NOT_READY; }
 
-	/** Whether we're capturing or not. lock(capturing) on write. */
+	/** Whether we're capturing or not. */
 	[Description(
 		nick = "Capturing",
 		blurb = "Whether we're capturing or not.")]
@@ -403,11 +404,13 @@ public class PhotoBin: Gst.Pipeline {
 	/** A pad callback for the camera elment to fire the flash. */
 	private Gst.PadProbeReturn
 	on_camera_buf(Gst.Pad pad, Gst.PadProbeInfo info) {
-		if (this.flash_config != null) {
-			var conf = (!)this.flash_config;
-			this.flash_config = null;
-			var maybe_buf = info.get_buffer();
-			flash_fire((!)maybe_buf, conf);
+		lock(this.capturing) {
+			if (this.flash_config != null) {
+				var conf = (!)this.flash_config;
+				this.flash_config = null;
+				var maybe_buf = info.get_buffer();
+				flash_fire((!)maybe_buf, conf);
+			}
 		}
 		return Gst.PadProbeReturn.OK;
 	}
@@ -441,22 +444,13 @@ public class PhotoBin: Gst.Pipeline {
 				this.allow_buffers--;
 				return Gst.PadProbeReturn.OK;
 			} else {
+				// if we've just finished, notify `capturing` off.
+				if (this._capturing) {
+					this.capturing = false;
+				}
 				// drop the buffer
 				return Gst.PadProbeReturn.DROP;
 			}
-		}
-	}
-
-	/** Called when a capture is requested and ptzf reports capture ready */
-	private void
-	on_capture_ready(Request request) {
-		// the general strategy here is to fire the flash, synchronized with a 
-		// buffer, let some buffers through, and have qadr pick the brighest.
-		lock (this.allow_buffers) {
-			this.allow_buffers = 5;
-		}
-		lock (this.flash_config) {
-			this.flash_config = request.config.flash;
 		}
 	}
 
@@ -504,19 +498,6 @@ public class PhotoBin: Gst.Pipeline {
 		if (is_ready) {
 			this.status = CaptureStatus.READY;
 			debug("Ptzf ready for capture.");
-			// Let buffers through to the QADR queue and notify that flash
-			// needs to be fired, sychronized with the next buffer.
-			lock(this.requests) {
-				// *pop* the last request from the queue, since ptzf is done
-				// working and we're ready to do the rest of the capture
-				// ourselves.
-				var maybe_request = this.requests.pop_tail();
-				if (maybe_request == null) {
-					error("Logic error somewhere. Popped Request was NULL.");
-				} else {
-					on_capture_ready((!)maybe_request);
-				}
-			}
 		} else {
 			debug("No longer ready for capture.");
 		}
@@ -548,12 +529,20 @@ public class PhotoBin: Gst.Pipeline {
 	 * Request a capture.
 	 */
 	public void capture(CaptureConfig config) {
-		lock(this.requests) {
-			if (this.requests.length > MAX_REQUESTS) {
-				capture_failure(
-					@"Too many requests pending (> $(MAX_REQUESTS))");
-			}
-			this.requests.push_tail(Request(config));
+		if (this.capturing) {
+			capture_failure("Capture already in progress");
+		}
+		lock(this.capturing) {
+			this.status = CaptureStatus.REQUESTED;
+			this.capturing = true;
+
+			// set properties
+			this.camera.exposuretime = config.exposure;
+			this.camera.gain = config.gain;
+			// TODO: WB
+
+			this.allow_buffers = 5;
+			this.flash_config = config.flash;
 		}
 	}
 
