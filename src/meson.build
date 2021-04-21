@@ -118,9 +118,12 @@ endif
 
 # where vala compiler outputs the header and  for testingg
 gst_smartphotobin_output_incdir = include_directories('.')
+gst_smartphotobin_vapidir = meson.current_build_dir()
+gst_smartphotobin_public_variables += 'vapidir=' + gst_smartphotobin_vapidir
 
 gst_smartphotobin_dep = declare_dependency(
   link_with: gst_smartphotobin_lib,
+  dependencies: gst_smartphotobin_deps,
   include_directories: [
     gst_smartphotobin_public_incdir,
     gst_smartphotobin_output_incdir,

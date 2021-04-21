@@ -27,7 +27,9 @@ tests = [
     'filename': 'test_gui',
     'sources': ['test_gui.vala'],
     'suites': ['interactive'],
-    'extra_deps': [dependency('gtk+-3.0')],
+    'extra_deps': [
+      dependency('gtk+-3.0'),
+    ],
   },
 ]
 
@@ -35,10 +37,9 @@ tests = [
 foreach t: tests
   exe = executable(t['filename'], t['sources'],
     dependencies: [
-        gst_smartphotobin_deps,
+        gst_smartphotobin_dep,
         t['extra_deps'],
     ],
-    link_with: gst_smartphotobin_lib,
     include_directories: gst_smartphotobin_output_incdir,
   )
   # skip running test if it's an interactive one
