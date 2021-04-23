@@ -54,7 +54,7 @@ public class QaDrBinConfig: Object {
 	/** Path to the diagnosis/whatever model .ini */
 	public string dr_model_config { get; set; default = DEFAULT_DR_MODEL; }
 	/** Resolution nvstreammux will scale to (models will expect this res) */
-	public Resolution model_res { get; set; default = Resolution(); }
+	public Resolution model_res { get; set; default = DEFAULT_MODEL_RESOLUTION; }
 	// FIXME(mdegans): make these configurable at build time.
 	/** Minimum model score for the image */
 	public float min_qa_score { get; set; default = -1.0f; }

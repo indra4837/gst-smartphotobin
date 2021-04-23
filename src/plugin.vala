@@ -83,5 +83,6 @@ public const BayerGains DEFAULT_BAYER_GAINS = {
 public const string DEFAULT_QA_MODEL = "@DEFAULT_QA_MODEL@";
 /** Default Diagnosis/Whatever model */
 public const string DEFAULT_DR_MODEL = "@DEFAULT_DR_MODEL@";
-
+/** Default model Resolution. Must be the same for QA and DR */
+public const Resolution DEFAULT_MODEL_RESOLUTION = {299, 299};
 }
