@@ -186,7 +186,9 @@ public class QaDrBin: Gst.Bin {
 		this.muxer.live_source = true; // docs say to use this
 
 		this.qa.unique_id = 171; // 17 == q, a == 1
+		assert(((int)this.qa.unique_id) == 171);
 		this.dr.unique_id = 418; // d == 4, r == 18
+		assert(((int)this.dr.unique_id) == 418);
 
 		// create the default config (set some element properties)
 		this.config = new QaDrBinConfig();
