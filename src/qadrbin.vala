@@ -301,8 +301,6 @@ public class QaDrBin: Gst.Bin {
 	 */
 	public override void
 	state_changed(Gst.State old, Gst.State current, Gst.State pending) {
-		// chain up
-		base.state_changed(old, current, pending);
 		// if we're not yet in the playing state, we should disable QA.
 		// otherwise QA will never complete.
 		if (current < Gst.State.PLAYING) {
