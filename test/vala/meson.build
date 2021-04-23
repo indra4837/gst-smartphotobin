@@ -31,6 +31,13 @@ tests = [
       dependency('gtk+-3.0', required: false),
     ],
   },
+  {
+    'description': 'test qadr',
+    'filename': 'test_qadr',
+    'sources': ['test_qadr.vala'],
+    'suites': ['interactive'],
+    'extra_deps': [],
+  },
 ]
 
 # build tests (and optionally execute them)
