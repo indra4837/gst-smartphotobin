@@ -36,6 +36,12 @@ static extern float nvmanualcam_get_lux(Gst.Buffer buf);
 [CCode (cname = "nvmanualcam_destroy_meta")]
 static extern bool nvmanualcam_destroy_meta(Gst.Buffer buf);
 
+[CCode (cname = "qadr_get_qa_score")]
+static extern float qadr_get_qa_score(Gst.Buffer buf);
+
+[CCode (cname = "qadr_has_disease")]
+static extern bool qadr_has_disease(Gst.Buffer buf);
+
 static List<string> validate_model_ini(string path) {
 	var errors = new List<string>();
 	var file = File.new_for_path(path);
@@ -43,6 +49,12 @@ static List<string> validate_model_ini(string path) {
 		errors.append(@"model path: \"$(path)\" does not exist");
 	}
 	return errors;
+}
+
+public enum QaFailure {
+	SHARPNESS,
+	BRIGHTNESS,
+	QA_SCORE,
 }
 
 /**
@@ -118,7 +130,7 @@ public class QaDrBin: Gst.Bin {
 	private dynamic Gst.Element demux;
 
 	/** Used when prerolling to let all buffers through */
-	private bool disable_qa = true;
+	private bool prerolling = true;
 
 	static construct {
 		set_static_metadata(
@@ -157,10 +169,10 @@ public class QaDrBin: Gst.Bin {
 	construct {
 		// construct our elements (or panic)
 		try {
-			this.muxer = create_element("nvstreammux", "muxer");
-			this.qa = create_element("nvinfer", "qa");
-			this.dr = create_element("nvinfer", "dr");
-			this.demux = create_element("nvstreamdemux", "demux");
+			this.muxer = create_element(MUXER_ELEMENT, "muxer");
+			this.qa = create_element(INFERENCE_ELEMENT, "qa");
+			this.dr = create_element(INFERENCE_ELEMENT, "dr");
+			this.demux = create_element(DEMUXER_ELEMENT, "demux");
 		} catch (ElementError.CREATE e) {
 			error(e.message);
 		}
@@ -220,7 +232,24 @@ public class QaDrBin: Gst.Bin {
 		// register a callback to do preliminary checks on photo quality using
 		// metadadata computed upstream.
 		(void)muxer_sink.add_probe(
-			Gst.PadProbeType.BUFFER, on_queue_src_buffer);
+			Gst.PadProbeType.BUFFER, on_muxer_sink_buffer);
+
+		// register callbacks to do QA and DR
+		var maybe_qa_src = this.qa.get_static_pad("src");
+		if (maybe_qa_src == null) {
+			error("Could not get `src` pad from qa nvinfer element");
+		}
+		var qa_src = (!)maybe_qa_src;
+		(void)qa_src.add_probe(
+			Gst.PadProbeType.BUFFER, on_qa_src_buffer);
+
+		var maybe_dr_src = this.dr.get_static_pad("src");
+		if (maybe_dr_src == null) {
+			error("Could not get `src` pad from dr nvinfer element");
+		}
+		var dr_src = (!)maybe_dr_src;
+		(void)dr_src.add_probe(
+			Gst.PadProbeType.BUFFER, on_dr_src_buffer);
 
 		// ghost pads to the outside of the bin
 		try {
@@ -251,9 +280,8 @@ public class QaDrBin: Gst.Bin {
 	 * brightness. Drops the buffer if any of these checks fail.
 	 */
 	protected virtual Gst.PadProbeReturn
-	on_queue_src_buffer(Gst.Pad pad, Gst.PadProbeInfo info) {
-		if (this.disable_qa) {
-			// we're prerolling -- let the buffer through
+	on_muxer_sink_buffer(Gst.Pad pad, Gst.PadProbeInfo info) {
+		if (this.prerolling) {
 			return Gst.PadProbeReturn.OK;
 		}
 		// Check we have a buffer attached to info. Really this is probably not
@@ -293,13 +321,56 @@ public class QaDrBin: Gst.Bin {
 		return Gst.PadProbeReturn.OK;
 	}
 
+	protected virtual Gst.PadProbeReturn
+	on_qa_src_buffer(Gst.Pad pad, Gst.PadProbeInfo info) {
+		if (this.prerolling) {
+			// we're prerolling -- let the buffer through
+			return Gst.PadProbeReturn.OK;
+		}
+		var maybe_buf = info.get_buffer();
+		if (maybe_buf == null) {
+			// should never happen
+			error("Somehow buffer is NULL. Something is very wrong");
+		}
+		var buf = (!) maybe_buf;
+		float bufscore = qadr_get_qa_score(buf);
+
+		if (bufscore < this.config.min_qa_score) {
+			qa_failed(
+				buf, QaFailure.QA_SCORE, bufscore, this.config.min_qa_score);
+			return Gst.PadProbeReturn.DROP;
+		}
+
+		return Gst.PadProbeReturn.OK;
+	}
+
+	protected virtual Gst.PadProbeReturn
+	on_dr_src_buffer(Gst.Pad pad, Gst.PadProbeInfo info) {
+		if (this.prerolling) {
+			// we're prerolling -- let the buffer through
+			return Gst.PadProbeReturn.OK;
+		}
+		var maybe_buf = info.get_buffer();
+		if (maybe_buf == null) {
+			// should never happen
+			error("Somehow buffer is NULL. Something is very wrong");
+		}
+		var buf = (!) maybe_buf;
+		if (qadr_has_disease(buf)) {
+			// emit disease-found
+			disease_found(buf);
+		}
+
+		return Gst.PadProbeReturn.OK;
+	}
+
 	/** END_CALLBACKS */
 
-	/** OVERRIDES BEGIN */
+	/** BEGIN OVERRIDES */
 
 	/**
-	 * Called when state is changed. This implementation chains up, then stores
-	 * a flag so buffer probes know to not perform QA when prerolling.
+	 * Called when state is changed. Used to set `prerolling` state, which
+	 * controls the flow to the QA Branch (and the appsink).
 	 */
 	public override void
 	state_changed(Gst.State old, Gst.State current, Gst.State pending) {
@@ -307,14 +378,40 @@ public class QaDrBin: Gst.Bin {
 		// otherwise QA will never complete.
 		if (current < Gst.State.PLAYING) {
 			debug("We're prerolling still. QA is disabled.");
-			this.disable_qa = true;
+			this.prerolling = true;
 		} else {
 			debug("We're done prerolling. QA is enabled.");
-			this.disable_qa = false;
+			this.prerolling = false;
 		}
 	}
 
-	/** OVERRIDES END */
+	/** END OVERRIDES */
+
+	/** SIGNALS START */
+
+	/**
+	 * Signals when a disease is found on a buffer.
+	 */
+	public virtual signal void
+	disease_found(Gst.Buffer buf) {
+		debug(@"disease-found:for buffer with dts:$(buf.dts)");
+	}
+
+	/**
+	 * Signals when QA fails, either from the model or from brightness/sharpness
+	 * checks
+	 *
+	 * @param buf the buffer for which QA failed.
+	 * @param reason the QA failed
+	 * @param score of the buffer that's less than...
+	 * @param min_score required by the current configuration
+	 */
+	public virtual signal void
+	qa_failed(Gst.Buffer buf, QaFailure reason, float score, float min_score) {
+		debug(@"qa-failed:because minimum $(reason.to_string()) not met ($(score) < $(min_score))");
+	}
+
+	/** SIGNALS END */
 
 }
 

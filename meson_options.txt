@@ -14,7 +14,13 @@ option('DEFAULT_DR_MODEL',
   value: '/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_infer_primary_nano.txt',
 )
 option('PRINTER',
-  type : 'string',
-  description : 'Define printer device path.',
+  type: 'string',
+  description: 'Define printer device path.',
   yield: true,  # use superproject option if available
+)
+option('DEEPSTREAM',
+  type: 'feature',
+  value: 'disabled',
+  description : 'enable/disable deepstream',
+  yield: true,
 )

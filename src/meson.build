@@ -44,6 +44,18 @@ gst_smartphotobin_deps = [
   dependency('gst_eyescan'),
 ]
 
+if get_option('DEEPSTREAM').enabled()
+  message('Building with DeepStream enabled.')
+  cc = meson.get_compiler('c')
+  ds_libdir = '/opt/nvidia/deepstream/deepstream/lib'
+  gst_smartphotobin_deps += cc.find_library('nvds_meta', dirs: ds_libdir)
+  gst_smartphotobin_deps += cc.find_library('nvdsgst_meta', dirs: ds_libdir)
+  gst_smartphotobin_incdirs += include_directories('/opt/nvidia/deepstream/deepstream/sources/includes')
+  gst_smartphotobin_cpp_args += '-DHAS_DEEPSTREAM'
+else
+  message('Building with DeepStream disabled.')
+endif
+
 # this configures the plugin info and defaults
 plugin_vala = configure_file(
   input: 'plugin.vala',
@@ -61,6 +73,11 @@ plugin_vala = configure_file(
   'gir_version': proj_ver_short,
   'DEFAULT_QA_MODEL': get_option('DEFAULT_QA_MODEL'),
   'DEFAULT_DR_MODEL': get_option('DEFAULT_DR_MODEL'),
+  'HAS_DEEPSTREAM': get_option('DEEPSTREAM').enabled().to_string().to_lower(),
+  'INFERENCE_ELEMENT': 'nvinfer',
+  'CONVERSION_ELEMENT': 'nvvideoconvert',
+  'MUXER_ELEMENT': 'nvstreammux',
+  'DEMUXER_ELEMENT': 'nvstreamdemux',
   }
 )
 
@@ -89,6 +106,8 @@ gst_smartphotobin_lib = library(gst_smartphotobin_libname.to_lower(), gst_smartp
     '--abi-stability',
     '--enable-experimental-non-null',
   ],
+  c_args: gst_smartphotobin_cpp_args,
+  cpp_args: gst_smartphotobin_cpp_args,
   include_directories: gst_smartphotobin_incdirs,
   dependencies: gst_smartphotobin_deps,
   install: true,

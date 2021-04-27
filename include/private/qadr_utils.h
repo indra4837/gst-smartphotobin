@@ -64,6 +64,23 @@ bool nvmanualcam_destroy_meta(GstBuffer* buf);
 
 // TODO(mdegans): add a dump metadata function
 
+/**
+ * @brief Get the qa score from the GstBuffer.
+ *
+ * @param buf buffer with QA DeepStream metadata attached
+ * @return float
+ */
+float qadr_get_qa_score(GstBuffer* buf);
+
+/**
+ * @brief Get the DR evaluation from the GstBuffer.
+ *
+ * @param buf buffer with DR DeepStream metadata attached
+ * @return float
+ *
+ */
+bool qadr_has_disease(GstBuffer* buf);
+
 G_END_DECLS
 
 #endif /* C819A85C_0692_42B0_A6A3_D64D3FE9454D */

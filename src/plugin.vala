@@ -64,12 +64,16 @@ namespace GstSmart {
 
 // Defaults for GstSmart.PhotoBin
 
+/** Whether Deepstream is enabled */
+public const bool HAS_DEEPSTREAM = @HAS_DEEPSTREAM@;
 /** Inference Element name */
-public const string INFERENCE_ELEMENT = "nvinfer";
+public const string INFERENCE_ELEMENT = "@INFERENCE_ELEMENT@";
 /** Video converter element name */
-public const string CONVERSION_ELEMENT = "nvvideoconvert";
-/** Muxer elemetn name (preps images for inference) */
-public const string MUXER_ELEMENT = "nvstreammux";
+public const string CONVERSION_ELEMENT = "@CONVERSION_ELEMENT@";
+/** Muxer element name (preps and batches images for inference) */
+public const string MUXER_ELEMENT = "@MUXER_ELEMENT@";
+/** Demuxer element name (splits up batched buffer) */
+public const string DEMUXER_ELEMENT = "@DEMUXER_ELEMENT@";
 /** Duration flash will be fired for in frames */
 public const float DEFAULT_FLASH_DURATION = 1.0f;
 /** Default bayer gains (white balance) for nvmanualcamerasrc */

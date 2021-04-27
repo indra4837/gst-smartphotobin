@@ -34,12 +34,13 @@ int main(string[] args) {
     }
     Gst.init(ref args);
 
+    int retcode = 0;
     var loop = new MainLoop();
 
     var pipe = new Gst.Pipeline("pipe");
     dynamic Gst.Element source = make_elem("uridecodebin");
     source.uri = args[1];
-    var qadr = make_elem("qadrbin");
+    dynamic Gst.Element qadr = make_elem("qadrbin");
     var sink = make_elem("autovideosink");
 
     pipe.add_many(source, qadr, sink);
@@ -54,6 +55,13 @@ int main(string[] args) {
                 string detail = null;
                 msg.parse_error(out err, out detail);
                 critical(@"$(err.code):$(err.message):$(detail)");
+                // we want to forward the error code to the return code, but
+                // we can't use 0, so we'll use -1 in that case.
+                if (err.code == 0) {
+                    retcode = -1;
+                } else {
+                    retcode = err.code;
+                }
                 loop.quit();
                 break;
             }
@@ -67,5 +75,5 @@ int main(string[] args) {
 
     loop.run();
 
-    return 0;
+    return retcode;
 }

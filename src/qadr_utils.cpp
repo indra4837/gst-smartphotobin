@@ -20,9 +20,12 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
+#ifdef HAS_DEEPSTREAM
+#include <gstnvdsmeta.h>
+#endif
 
-#include "qadr_utils.h"
 #include "metadata.hpp"
+#include "qadr_utils.h"
 
 using nvmanualcam::attachMetadata;
 using nvmanualcam::Metadata;
@@ -41,6 +44,7 @@ float nvmanualcam_get_lux(GstBuffer* buf) {
   }
   return lux;
 }
+
 float nvmanualcam_get_sharpness(GstBuffer* buf,
                                 float left,
                                 float top,
@@ -65,6 +69,7 @@ float nvmanualcam_get_sharpness(GstBuffer* buf,
   }
   return sharpness;
 }
+
 bool nvmanualcam_destroy_meta(GstBuffer* buf) {
   g_return_val_if_fail(GST_IS_BUFFER(buf), false);
   auto meta = Metadata::steal(buf);
@@ -74,4 +79,93 @@ bool nvmanualcam_destroy_meta(GstBuffer* buf) {
   }
   // just don't re-attach it
   return true;
+}
+
+/**
+ * @brief Get the qa score from the GstBuffer
+ *
+ * @param buf
+ * @return float
+ */
+float qadr_get_qa_score(GstBuffer* buf) {
+  float score = 0.0f;
+#ifdef HAS_DEEPSTREAM
+  NvDsBatchMeta* b_meta = nullptr;
+  NvDsMetaList* l_frame = nullptr;
+  NvDsMetaList* l_obj = nullptr;
+  NvDsFrameMeta* f_meta = nullptr;
+  NvDsObjectMeta* o_meta = nullptr;
+
+  // get batch level metadata
+  b_meta = gst_buffer_get_nvds_batch_meta(buf);
+  if (!b_meta) {
+    GST_ERROR("No NvDsBatchMeta on GstBuffer!");
+    return 0.0f;
+  }
+
+  // iterate through the list of frame meta
+  for (l_frame = b_meta->frame_meta_list; l_frame != nullptr;
+       l_frame = l_frame->next) {
+    f_meta = static_cast<NvDsFrameMeta*>(l_frame->data);
+    g_assert(f_meta != nullptr);
+    // then through the object meta
+    for (l_obj = f_meta->obj_meta_list; l_obj != nullptr; l_obj = l_obj->next) {
+      o_meta = static_cast<NvDsObjectMeta*>(l_obj->data);
+      g_assert(o_meta != nullptr);
+      // skip if the component id is not ours
+      if (o_meta->unique_component_id != 171) {
+        continue;
+      }
+      // This should be the score. Otherwise we'll have to parse the tensor
+      // manually.
+      return o_meta->confidence;
+    }
+  }
+#else
+  (void)buf;
+#endif
+  return score;
+}
+
+/**
+ * @brief
+ *
+ */
+bool qadr_has_disease(GstBuffer* buf) {
+  bool disease = false;
+#ifdef HAS_DEEPSTREAM
+  NvDsBatchMeta* b_meta = nullptr;
+  NvDsMetaList* l_frame = nullptr;
+  NvDsMetaList* l_obj = nullptr;
+  NvDsFrameMeta* f_meta = nullptr;
+  NvDsObjectMeta* o_meta = nullptr;
+
+  // get batch level metadata
+  b_meta = gst_buffer_get_nvds_batch_meta(buf);
+  if (!b_meta) {
+    GST_ERROR("No NvDsBatchMeta on GstBuffer!");
+    return 0.0f;
+  }
+
+  // iterate through the list of frame meta
+  for (l_frame = b_meta->frame_meta_list; l_frame != nullptr;
+       l_frame = l_frame->next) {
+    f_meta = static_cast<NvDsFrameMeta*>(l_frame->data);
+    g_assert(f_meta != nullptr);
+    // then through the object meta
+    for (l_obj = f_meta->obj_meta_list; l_obj != nullptr; l_obj = l_obj->next) {
+      o_meta = static_cast<NvDsObjectMeta*>(l_obj->data);
+      g_assert(o_meta != nullptr);
+      // skip if the component id is not ours
+      if (o_meta->unique_component_id != 418) {
+        continue;
+      }
+      // Have to check the model to see if this is the score we're looking for
+      return o_meta->confidence > 0.0f;
+    }
+  }
+#else
+  (void)buf;
+#endif
+  return disease;
 }

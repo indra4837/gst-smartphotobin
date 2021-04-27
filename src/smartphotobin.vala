@@ -155,7 +155,7 @@ public class PhotoBin: Gst.Pipeline {
 	/** A Queue for the inference brahch */
 	private Gst.Element infer_q;
 	/** Our Quality Assurace and Diagnostics bin */
-	private QaDrBin qadr;
+	private QaDrBin? qadr;
 	/** Converter to CPU buffer */
 	private Gst.Element sink_conv;
 	/** Appsink as Gst.Element */
@@ -207,7 +207,9 @@ public class PhotoBin: Gst.Pipeline {
 					@"Could not set config on $(this.name) because: $(e.message)");
 			}
 			this._config = value;
-			this.qadr.config = value.qadr;
+			if (this.qadr is QaDrBin) {
+				((!)this.qadr).config = value.qadr;
+			}
 			this.camera.sensor_id = value.sensor_id;
 			this.camera.sensor_mode = value.sensor_mode;
 		}
@@ -225,6 +227,12 @@ public class PhotoBin: Gst.Pipeline {
 		nick = "Capturing",
 		blurb = "Whether we're capturing or not.")]
 	bool capturing { get; private set; default = false; }
+
+	/** Whether deepstream was enabled at compile time */
+	[Description(
+		nick = "DeepStream Enabled",
+		blurb = "Whether we're compiled with DeepStream support.")]
+	bool has_deepstream { get { return HAS_DEEPSTREAM; } }
 
 	static construct {
 		set_static_metadata(
@@ -256,7 +264,11 @@ public class PhotoBin: Gst.Pipeline {
 			this.overlay = (!)maybe_overlay;
 
 			this.infer_q = create_element("queue", "infer_q");
-			this.qadr = new QaDrBin(null, "qa");
+			if (HAS_DEEPSTREAM) {
+				this.qadr = new QaDrBin(null, "qa");
+			} else {
+				this.qadr = null;
+			}
 			this.sink_conv = create_element("nvvidconv", "sink_conv");
 			this.sink = create_element("appsink", "sink");
 		} catch (ElementError.CREATE e) {
@@ -264,7 +276,7 @@ public class PhotoBin: Gst.Pipeline {
 		}
 
 		// a handy temorary array of all our elements
-		Gst.Element[] elements = {
+		Gst.Element?[] elements = {
 			this.camera,
 			this.ptzf,
 			this.tee,
@@ -281,6 +293,9 @@ public class PhotoBin: Gst.Pipeline {
 
 		// add them all to self
 		foreach (var e in elements) {
+			if (e == null) {
+				continue;
+			}
 			if (!this.add((!)e)) {
 				error(@"could not add $(((!)e).name) to $(this.name)");
 			}
@@ -318,7 +333,11 @@ public class PhotoBin: Gst.Pipeline {
 			link_elements({this.display_q, this.egl_tx, this.egl_display});
 
 			// link the inference / appsink branch
-			link_elements({this.infer_q, this.qadr, this.sink_conv, this.sink});
+			if (this.qadr is QaDrBin) {
+				link_elements({this.infer_q, (!)this.qadr, this.sink_conv, this.sink});
+			} else {
+				link_elements({this.infer_q, this.sink_conv, this.sink});
+			}
 		} catch (ElementError.LINK e) {
 			error(e.message);
 		}
@@ -547,6 +566,27 @@ public class PhotoBin: Gst.Pipeline {
 	}
 
 	/** END METHODS */
+
+	/** BEGIN OVERRIDES */
+
+	/**
+	 * Called when state is changed. Used to set `prerolling` state, which
+	 * controls the flow to the QA Branch (and the appsink).
+	 */
+	public override void
+	state_changed(Gst.State old, Gst.State current, Gst.State pending) {
+		// if we're not yet in the playing state, we should disable QA.
+		// otherwise QA will never complete.
+		if (current < Gst.State.PLAYING) {
+			debug("We're prerolling still. QA is disabled.");
+			this.prerolling = true;
+		} else {
+			debug("We're done prerolling. QA is enabled.");
+			this.prerolling = false;
+		}
+	}
+
+	/** END OVERRIDES */
 }
 
 } // namespace GstSmart
