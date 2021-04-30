@@ -23,15 +23,6 @@
 # a list of dicts describing tests
 tests = [
   {
-    'description': 'test gui',
-    'filename': 'test_gui',
-    'sources': ['test_gui.vala'],
-    'suites': ['interactive'],
-    'extra_deps': [
-      dependency('gtk+-3.0', required: false),
-    ],
-  },
-  {
     'description': 'test qadr',
     'filename': 'test_qadr',
     'sources': ['test_qadr.vala'],
@@ -39,6 +30,16 @@ tests = [
     'extra_deps': [],
   },
 ]
+
+if gui_enabled
+  tests += {
+    'description': 'test gui',
+    'filename': 'test_gui',
+    'sources': ['test_gui.vala'],
+    'suites': ['interactive'],
+    'extra_deps': [],
+  }
+endif
 
 # build tests (and optionally execute them)
 foreach t: tests

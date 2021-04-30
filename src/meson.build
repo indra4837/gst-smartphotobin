@@ -1,7 +1,17 @@
-
 # main gstreamer depenency
 gst_dep = dependency('gstreamer-1.0')
 gst_ver = gst_dep.version().split('.')
+
+# optional gui dependencies
+gtk_dep = dependency('gtk+-3.0', required: get_option('GUI'))
+gdk_x11_dep = dependency('gdk-x11-3.0', required: get_option('GUI'))
+
+# valac args
+vala_args = [
+  '--vapi-comments',
+  '--abi-stability',
+  '--enable-experimental-non-null',
+]
 
 # plugin path configuration for install
 gst_install_dir = get_option('GST_PLUGIN_PATH')
@@ -91,6 +101,15 @@ gst_smartphotobin_sources = [
   'smartphotobin_utils.cpp',
 ]
 
+gui_enabled = false
+if gtk_dep.found() and gdk_x11_dep.found()
+  message('Building with Gtk test gui.')
+  subdir('ui')
+  gui_enabled = true
+else
+  message('Building without Gtk test gui.')
+endif
+
 # changing these names will breaks stuff because gstreamer and other GNU things
 # demand a very specific naming convention to enforce consistency.
 gst_smartphotobin_libname = 'gst' + meson.project_name()
@@ -101,11 +120,7 @@ gst_smartphotobin_lib = library(gst_smartphotobin_libname.to_lower(), gst_smartp
   vala_header: meson.project_name().to_lower() + '.h',
   vala_vapi: gst_smartphotobin_vapi,
   vala_gir: gst_smartphotobin_gir,
-  vala_args: [
-    '--vapi-comments',
-    '--abi-stability',
-    '--enable-experimental-non-null',
-  ],
+  vala_args: vala_args,
   c_args: gst_smartphotobin_cpp_args,
   cpp_args: gst_smartphotobin_cpp_args,
   include_directories: gst_smartphotobin_incdirs,

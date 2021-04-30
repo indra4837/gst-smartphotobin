@@ -18,19 +18,13 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 //  DEALINGS IN THE SOFTWARE.
 
-int main(string[] args) {
+static int main(string[] args) {
     var app = new Gtk.Application(
         "dev.mdegans.GstSmartTestGui", GLib.ApplicationFlags.FLAGS_NONE);
-    
-    var bin = new GstSmart.PhotoBin();
-    (void)bin;
 
     app.activate.connect(() => {
-        var window = new Gtk.ApplicationWindow(app);
+        var window = new GstSmart.TestAppWindow();
 
-        var area = new Gtk.DrawingArea();
-
-        window.add(area);
         window.show_all();
         window.present();
     });

@@ -24,3 +24,8 @@ option('DEEPSTREAM',
   description : 'enable/disable deepstream',
   yield: true,
 )
+option('GUI',
+  type: 'feature',
+  description : 'enable/disable gtk test gui',
+  yield: true,
+)
