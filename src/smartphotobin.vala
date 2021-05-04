@@ -113,7 +113,7 @@ public class PhotoBin: Gst.Pipeline {
 
 	/** BEGIN ENUMS */
 
-	enum CaptureStatus {
+	public enum CaptureStatus {
 		NOT_READY,
 		REQUESTED,
 		FOCUSED,
@@ -192,7 +192,7 @@ public class PhotoBin: Gst.Pipeline {
 	[Description(
 		nick = "Config",
 		blurb = "Configuration. Validate before or this element will panic.")]
-	PhotoBinConfig config {
+	public PhotoBinConfig config {
 		get {
 			return this._config;
 		}
@@ -219,26 +219,26 @@ public class PhotoBin: Gst.Pipeline {
 	[Description(
 		nick = "Status",
 		blurb = "The capture status of this elmeent.")]
-	CaptureStatus status {
+	public CaptureStatus status {
 		get; private set; default = CaptureStatus.NOT_READY; }
 
 	/** Whether we're capturing or not. */
 	[Description(
 		nick = "Capturing",
 		blurb = "Whether we're capturing or not.")]
-	bool capturing { get; private set; default = false; }
+	public bool capturing { get; private set; default = false; }
 
 	/** Whether deepstream was enabled at compile time */
 	[Description(
 		nick = "DeepStream Enabled",
 		blurb = "Whether we're compiled with DeepStream support.")]
-	bool has_deepstream { get { return HAS_DEEPSTREAM; } }
+	public bool has_deepstream { get { return HAS_DEEPSTREAM; } }
 
 	/** Brightness in 0.0-1.0 range */
 	[Description(
 		nick = "Brightness",
 		blurb = "Camera gain in 0.0-1.0 range.")]
-	float brightness {
+	public float brightness {
 		get {
 			float gain = this.camera.gain;
 			return (gain - MIN_GAIN) / (MAX_GAIN - MIN_GAIN);
