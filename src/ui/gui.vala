@@ -94,7 +94,7 @@ public class TestAppWindow : Gtk.ApplicationWindow {
         pipe.capture_success.connect(gallery.add_thumbnail);
         pipe.capture_failure.connect(on_error);
 
-        overlay_area.show.connect(() => {
+        overlay_area.realize.connect(() => {
             // connect video overlay
             var maybe_area_win = overlay_area.get_window() as Gdk.X11.Window;
             if (maybe_area_win != null) {
