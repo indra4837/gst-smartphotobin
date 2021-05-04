@@ -147,7 +147,7 @@ if g_ir_compiler.found()
     install_dir: get_option('libdir') / 'girepository-1.0',
   )
 else
-  message('not building typelib language bindings (sudo apt-get install sudo apt install gobject-introspection)')
+  message('not building typelib language bindings (sudo apt install gobject-introspection)')
 endif
 
 # where vala compiler outputs the header and  for testingg
