@@ -234,6 +234,21 @@ public class PhotoBin: Gst.Pipeline {
 		blurb = "Whether we're compiled with DeepStream support.")]
 	bool has_deepstream { get { return HAS_DEEPSTREAM; } }
 
+	/** Brightness in 0.0-1.0 range */
+	[Description(
+		nick = "Brightness",
+		blurb = "Camera gain in 0.0-1.0 range.")]
+	float brightness {
+		get {
+			float gain = this.camera.gain;
+			return (gain - MIN_GAIN) / (MAX_GAIN - MIN_GAIN);
+		}
+		set {
+			assert(value >= MIN_GAIN && value <= MAX_GAIN);
+			this.camera.gain = value * (MAX_GAIN - MIN_GAIN) + MIN_GAIN;
+		}
+	}
+
 	static construct {
 		set_static_metadata(
 			"Smart Photo Bin",

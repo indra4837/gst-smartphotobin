@@ -89,4 +89,19 @@ public const string DEFAULT_QA_MODEL = "@DEFAULT_QA_MODEL@";
 public const string DEFAULT_DR_MODEL = "@DEFAULT_DR_MODEL@";
 /** Default model Resolution. Must be the same for QA and DR */
 public const Resolution DEFAULT_MODEL_RESOLUTION = {299, 299};
+
+// Ugly stuff until the camera source refactoring is complete;
+
+/**
+ * Minimum gain on the nvmanualcamerasrc element.
+ */
+public const float MIN_GAIN = 1.0f;
+/**
+ * Maximum gain on the nvmanualcamerasrc element. This is problematic because
+ * it might not match the gain of the actual camera sensor and the element
+ * will not warn when a value out of range is set. For the imx477, however,
+ * this should be fine.
+ */
+public const float MAX_GAIN = 16.0f;
+
 }
