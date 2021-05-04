@@ -19,11 +19,14 @@
 //  DEALINGS IN THE SOFTWARE.
 
 static int main(string[] args) {
+    Gst.init(ref args);
+
     var app = new Gtk.Application(
         "dev.mdegans.GstSmartTestGui", GLib.ApplicationFlags.FLAGS_NONE);
 
     app.activate.connect(() => {
-        var window = new GstSmart.TestAppWindow();
+        print("ACTIVATING APPLICATION WINDOW\n");
+        var window = new GstSmart.TestAppWindow(app);
 
         window.show_all();
         window.present();

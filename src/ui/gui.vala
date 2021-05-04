@@ -88,22 +88,22 @@ public class TestAppWindow : Gtk.ApplicationWindow {
         // add the ui elements to the left and right panels
         left_revealer.add(gallery);
         right_revealer.add(controls);
-        right_revealer.reveal_child = true;
-
-        // connect video overlay
-        var maybe_area_win = overlay_area.get_window() as Gdk.X11.Window;
-        if (maybe_area_win != null) {
-            var area_win = (!)maybe_area_win;
-            pipe.overlay.set_window_handle((uint*)area_win.get_xid());
-        } else {
-            error("could not get DrawingArea window as Gdk.X11.Window");
-        }
 
         // connect callbacks
         pipe.capture_ready.connect(controls.capture.set_sensitive);
         pipe.capture_success.connect(gallery.add_thumbnail);
         pipe.capture_failure.connect(on_error);
 
+        overlay_area.show.connect(() => {
+            // connect video overlay
+            var maybe_area_win = overlay_area.get_window() as Gdk.X11.Window;
+            if (maybe_area_win != null) {
+                var area_win = (!)maybe_area_win;
+                pipe.overlay.set_window_handle((uint*)area_win.get_xid());
+            } else {
+                error("could not get DrawingArea window as Gdk.X11.Window");
+            }
+        });
         controls.play.clicked.connect(() => {
             var ret =  pipe.set_state(Gst.State.PLAYING);
             if (ret == Gst.StateChangeReturn.FAILURE) {
@@ -119,6 +119,10 @@ public class TestAppWindow : Gtk.ApplicationWindow {
         controls.capture.clicked.connect(() => {
             pipe.capture(controls.config);
         });
+    }
+
+    public TestAppWindow(Gtk.Application app) {
+        Object(application: app);
     }
 
     private void on_error(string errmsg) {
