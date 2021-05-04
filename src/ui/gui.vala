@@ -104,6 +104,18 @@ public class TestAppWindow : Gtk.ApplicationWindow {
                 error("could not get DrawingArea window as Gdk.X11.Window");
             }
         });
+        overlay_area.draw.connect((ctx) => {
+            // If the pipeline is less than the paused state, we need to draw
+            // a black box over the drawing area using the Cairo.Context, or it
+            // doesn't redraw and we get trails and junk.
+            if (pipe.state < Gst.State.PAUSED) {
+                Gtk.Allocation allocation;
+                overlay_area.get_allocation(out allocation);
+                ctx.set_source_rgb(0,0,0);
+                ctx.rectangle(0,0,allocation.width, allocation.height);
+                ctx.fill();
+            }
+        });
         controls.play.clicked.connect(() => {
             var ret =  pipe.set_state(Gst.State.PLAYING);
             if (ret == Gst.StateChangeReturn.FAILURE) {
