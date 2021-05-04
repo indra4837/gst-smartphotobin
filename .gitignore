@@ -35,5 +35,8 @@
 builddir/
 build-clang/
 
-#ide stuff
+# ide stuff
 .vscode/
+
+# glade stuff
+*.ui~
