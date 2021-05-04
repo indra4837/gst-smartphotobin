@@ -249,6 +249,12 @@ public class PhotoBin: Gst.Pipeline {
 		}
 	}
 
+	/** Current state of this element. */
+	[Description(
+		nick = "State",
+		blurb = "Current GstState of this element. Useful for UI.")]
+	public Gst.State state { get; private set; }
+
 	static construct {
 		set_static_metadata(
 			"Smart Photo Bin",
@@ -592,6 +598,7 @@ public class PhotoBin: Gst.Pipeline {
 	state_changed(Gst.State old, Gst.State current, Gst.State pending) {
 		// if we're not yet in the playing state, we should disable QA.
 		// otherwise QA will never complete.
+		state = current;
 		if (current < Gst.State.PLAYING) {
 			debug("We're prerolling still. QA is disabled.");
 			this.prerolling = true;
