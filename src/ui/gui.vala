@@ -24,6 +24,21 @@
 
 namespace GstSmart {
 
+[GtkTemplate (ui = "/components/test_gui_status_bar.ui")]
+public class StatusBar : Gtk.Statusbar {
+    [GtkChild]
+    public Gtk.ToggleButton fullscreen;
+
+    [GtkChild]
+    public Gtk.ToggleButton controls;
+
+    [GtkChild]
+    public Gtk.ToggleButton gallery;
+
+    [GtkChild]
+    public Gtk.Label status;
+}
+
 [GtkTemplate (ui = "/components/test_gui_slider_box.ui")]
 public class SliderBox : Gtk.Box {
     [GtkChild] 
@@ -96,24 +111,48 @@ public class TestAppWindow : Gtk.ApplicationWindow {
     private Gtk.DrawingArea overlay_area;
     [GtkChild]
     private Gtk.Revealer right_revealer;
+    [GtkChild]
+    private Gtk.Box main_box;
 
     private PhotoBin pipe;
     private Gallery gallery;
     private Controls controls;
+    private StatusBar statusbar;
 
     construct {
         pipe = new GstSmart.PhotoBin();
         gallery = new Gallery();
         controls = new Controls();
+        statusbar = new StatusBar();
 
         // add the ui elements to the left and right panels
         left_revealer.add(gallery);
         right_revealer.add(controls);
 
-        // connect callbacks
+        // add the statusbar on the bottom and connect it's buttons
+        main_box.add(statusbar);
+        statusbar.fullscreen.toggled.connect((btn) => {
+            // this could use some code to verify the state, but it's just a
+            // test so it's fine.
+            this.fullscreen();
+        });
+        statusbar.controls.toggled.connect((btn) => {
+            // toggles right revealer
+            right_revealer.reveal_child = btn.active;
+        });
+        statusbar.gallery.toggled.connect((btn) => {
+            // toggles gallery
+            left_revealer.reveal_child = btn.active;
+        });
+
+
+        // connect pipeline callbacks
         pipe.capture_ready.connect(controls.capture.set_sensitive);
         pipe.capture_success.connect(gallery.add_thumbnail);
         pipe.capture_failure.connect(on_error);
+        pipe.notify["status"].connect(() => {
+            statusbar.status.set_text(pipe.status.to_string());
+        });
 
         overlay_area.realize.connect(() => {
             // connect video overlay

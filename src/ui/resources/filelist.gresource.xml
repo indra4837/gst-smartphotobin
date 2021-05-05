@@ -22,6 +22,7 @@
 <file compressed="true">components/test_gui_gallery_item.ui</file>
 <file compressed="true">components/test_gui_gallery.ui</file>
 <file compressed="true">components/test_gui_slider_box.ui</file>
+<file compressed="true">components/test_gui_status_bar.ui</file>
 <file compressed="true">layouts/test_gui.ui</file>
 </gresource>
 </gresources>
