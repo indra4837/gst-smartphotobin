@@ -24,6 +24,31 @@
 
 namespace GstSmart {
 
+[GtkTemplate (ui = "/components/test_gui_slider_box.ui")]
+public class SliderBox : Gtk.Box {
+    [GtkChild] 
+    Gtk.Label label;
+
+    [GtkChild]
+    Gtk.Scale scale;
+
+    [GtkChild]
+    Gtk.Adjustment adjustment;
+
+    public SliderBox(Gst.Element e,
+                     string prop_name,
+                     double min = 0.0,
+                     double max = 1.0) {
+        label.set_text(prop_name);
+        adjustment.set_lower(min);
+        adjustment.set_upper(max);
+        // change value when the range is adjusted
+        scale.value_changed.connect((range) => {
+            e.set(prop_name, range.get_value());
+        });
+    }
+}
+
 [GtkTemplate (ui = "/components/test_gui_controls.ui")]
 public class Controls : Gtk.Box {
     [GtkChild]
@@ -116,6 +141,7 @@ public class TestAppWindow : Gtk.ApplicationWindow {
                 ctx.fill();
             }
         });
+        // connect buttons
         controls.play.clicked.connect(() => {
             var ret =  pipe.set_state(Gst.State.PLAYING);
             if (ret == Gst.StateChangeReturn.FAILURE) {
@@ -131,6 +157,12 @@ public class TestAppWindow : Gtk.ApplicationWindow {
         controls.capture.clicked.connect(() => {
             pipe.capture(controls.config);
         });
+        // connect sliders
+        var maybe_p_elem = pipe as Gst.Element;
+        assert (maybe_p_elem != null);
+        var p_elem = (!)maybe_p_elem;
+        controls.add(new SliderBox(p_elem, "brightness"));
+        controls.add(new SliderBox(p_elem, "zoom"));
     }
 
     public TestAppWindow(Gtk.Application app) {

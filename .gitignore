@@ -40,3 +40,4 @@ build-clang/
 
 # glade stuff
 *.ui~
+*.ui#

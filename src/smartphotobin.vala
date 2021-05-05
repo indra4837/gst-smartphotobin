@@ -248,6 +248,17 @@ public class PhotoBin: Gst.Pipeline {
 			this.camera.gain = value * (MAX_GAIN - MIN_GAIN) + MIN_GAIN;
 		}
 	}
+	[Description(
+		nick = "Zoom",
+		blurb = "Camera zoom in 0.0-1.0 range.")]
+	public float zoom {
+		get {
+			return this.ptzf.zoom;
+		}
+		set {
+			this.ptzf.zoom = value;
+		}
+	}
 
 	/** Current state of this element. */
 	[Description(
