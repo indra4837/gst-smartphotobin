@@ -8,8 +8,7 @@
     <property name="spacing">2</property>
     <child>
       <object class="GtkToggleButton" id="gallery">
-        <property name="label" translatable="yes">togglebutton</property>
-        <property name="visible">True</property>
+        <property name="label" translatable="yes">gallery</property>
         <property name="can-focus">True</property>
         <property name="receives-default">True</property>
       </object>
@@ -33,7 +32,7 @@
     </child>
     <child>
       <object class="GtkToggleButton" id="fullscreen">
-        <property name="label" translatable="yes">togglebutton</property>
+        <property name="label" translatable="yes">fullscreen</property>
         <property name="visible">True</property>
         <property name="can-focus">True</property>
         <property name="receives-default">True</property>
@@ -46,8 +45,7 @@
     </child>
     <child>
       <object class="GtkToggleButton" id="controls">
-        <property name="label" translatable="yes">togglebutton</property>
-        <property name="visible">True</property>
+        <property name="label" translatable="yes">controls</property>
         <property name="can-focus">True</property>
         <property name="receives-default">True</property>
         <property name="image-position">right</property>

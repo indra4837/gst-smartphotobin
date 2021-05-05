@@ -119,6 +119,8 @@ public class TestAppWindow : Gtk.ApplicationWindow {
     private Controls controls;
     private StatusBar statusbar;
 
+    private bool is_fullscreen;
+
     construct {
         pipe = new GstSmart.PhotoBin();
         gallery = new Gallery();
@@ -131,10 +133,17 @@ public class TestAppWindow : Gtk.ApplicationWindow {
 
         // add the statusbar on the bottom and connect it's buttons
         main_box.add(statusbar);
+        this.window_state_event.connect((state) => {
+            // cache the fullscreen state
+            is_fullscreen = state.changed_mask == Gdk.WindowState.FULLSCREEN;
+        });
         statusbar.fullscreen.toggled.connect((btn) => {
-            // this could use some code to verify the state, but it's just a
-            // test so it's fine.
-            this.fullscreen();
+            // toggle the fullscreen state
+            if (is_fullscreen) {
+                unfullscreen();
+            } else {
+                fullscreen();
+            }
         });
         statusbar.controls.toggled.connect((btn) => {
             // toggles right revealer
