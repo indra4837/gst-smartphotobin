@@ -32,16 +32,12 @@ public class SliderBox : Gtk.Box {
     [GtkChild]
     Gtk.Scale scale;
 
-    [GtkChild]
-    Gtk.Adjustment adjustment;
-
     public SliderBox(Gst.Element e,
                      string prop_name,
                      double min = 0.0,
                      double max = 1.0) {
         label.set_text(prop_name);
-        adjustment.set_lower(min);
-        adjustment.set_upper(max);
+        scale.set_range(min, max);
         // change value when the range is adjusted
         scale.value_changed.connect((range) => {
             e.set(prop_name, range.get_value());
