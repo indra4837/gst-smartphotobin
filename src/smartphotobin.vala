@@ -244,7 +244,7 @@ public class PhotoBin: Gst.Pipeline {
 			return (gain - MIN_GAIN) / (MAX_GAIN - MIN_GAIN);
 		}
 		set {
-			assert(value >= MIN_GAIN && value <= MAX_GAIN);
+			assert(value >= 0.0 && value <= 1.0);
 			this.camera.gain = value * (MAX_GAIN - MIN_GAIN) + MIN_GAIN;
 		}
 	}
