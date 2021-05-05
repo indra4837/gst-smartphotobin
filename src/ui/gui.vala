@@ -201,12 +201,18 @@ public class TestAppWindow : Gtk.ApplicationWindow {
         controls.capture.clicked.connect(() => {
             pipe.capture(controls.config);
         });
+
         // connect sliders
         var maybe_p_elem = pipe as Gst.Element;
         assert (maybe_p_elem != null);
         var p_elem = (!)maybe_p_elem;
         controls.add(new SliderBox(p_elem, "brightness"));
         controls.add(new SliderBox(p_elem, "zoom"));
+
+        // cleanup pipeline when widget is destroyed
+        this.destroy.connect(() => {
+            pipe.set_state(Gst.State.NULL);
+        });
     }
 
     public TestAppWindow(Gtk.Application app) {
