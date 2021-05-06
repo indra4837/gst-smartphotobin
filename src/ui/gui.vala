@@ -135,7 +135,7 @@ public class TestAppWindow : Gtk.ApplicationWindow {
         main_box.add(statusbar);
         this.window_state_event.connect((state) => {
             // cache the fullscreen state
-            is_fullscreen = state.new_window_state == Gdk.WindowState.FULLSCREEN;
+            is_fullscreen = (bool)(state.new_window_state & Gdk.WindowState.FULLSCREEN);
         });
         statusbar.fullscreen.toggled.connect((btn) => {
             // toggle the fullscreen state
