@@ -272,7 +272,7 @@ public class Controls : Gtk.Box {
         });
 
         // add sliders for brightness and zoom
-        add(new SliderBox(pipe.camera, "brightness"));
+        add(new SliderBox(pipe, "brightness"));
         add(new SliderBox(pipe.ptzf, "zoom"));
         add(capture_controls);
     }
