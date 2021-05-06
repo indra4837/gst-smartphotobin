@@ -239,6 +239,24 @@ public class Controls : Gtk.Box {
         capture.set_sensitive(pipe.ptzf.capture_ready);
         pipe.capture_ready.connect(capture.set_sensitive);
 
+        // Some properties cannot be set when the pipeline is not playing,
+        // so we'll grey them out.
+        var zoom = new SliderBox(pipe.ptzf, "zoom");
+        zoom.sensitive = false;
+        pipe.notify["state"].connect(() => {
+            if (pipe.state < Gst.State.PAUSED) {
+                imshow_grey.sensitive = false;
+                imshow_thresh.sensitive = false;
+                imshow_sharp.sensitive = false;
+                zoom.sensitive = false;
+            } else {
+                imshow_grey.sensitive = true;
+                imshow_thresh.sensitive = true;
+                imshow_sharp.sensitive = true;
+                zoom.sensitive = true;
+            }
+        });
+
         // connect pipline state control buttons
         play.clicked.connect(() => {
             var ret =  pipe.set_state(Gst.State.PLAYING);
@@ -273,7 +291,7 @@ public class Controls : Gtk.Box {
 
         // add sliders for brightness and zoom
         add(new SliderBox(pipe, "brightness"));
-        add(new SliderBox(pipe.ptzf, "zoom"));
+        add(zoom);
         add(capture_controls);
     }
 

@@ -15,6 +15,7 @@
           <object class="GtkToggleButton" id="imshow_grey">
             <property name="label" translatable="yes">imshow grey</property>
             <property name="visible">True</property>
+            <property name="sensitive">False</property>
             <property name="can-focus">True</property>
             <property name="receives-default">True</property>
           </object>
@@ -28,6 +29,7 @@
           <object class="GtkToggleButton" id="imshow_thresh">
             <property name="label" translatable="yes">imshow thresh</property>
             <property name="visible">True</property>
+            <property name="sensitive">False</property>
             <property name="can-focus">True</property>
             <property name="receives-default">True</property>
           </object>
@@ -41,6 +43,7 @@
           <object class="GtkToggleButton" id="imshow_sharp">
             <property name="label" translatable="yes">imshow sharp</property>
             <property name="visible">True</property>
+            <property name="sensitive">False</property>
             <property name="can-focus">True</property>
             <property name="receives-default">True</property>
           </object>
