@@ -22,7 +22,7 @@
       <object class="GtkLabel" id="state">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="label" translatable="yes">State: NULL</property>
+        <property name="label" translatable="yes">State: GST_STATE_NULL</property>
       </object>
       <packing>
         <property name="expand">False</property>
