@@ -130,7 +130,7 @@ public class PhotoBin: Gst.Pipeline {
 	/** Our camera source */
 	private dynamic Gst.Element camera;
 	/** Our control element */
-	private dynamic Gst.Element ptzf;
+	public dynamic Gst.Element ptzf;
 	/** Cached state of ptzf.focused */
 	private bool cached_ptzf_focused = false;
 	/** Cached state of ptzf.aligned */

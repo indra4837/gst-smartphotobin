@@ -37,6 +37,18 @@ public class StatusBar : Gtk.Statusbar {
 
     [GtkChild]
     public Gtk.Label status;
+
+    [GtkChild]
+    public Gtk.Label focused;
+
+    [GtkChild]
+    public Gtk.Label aligned;
+
+    [GtkChild]
+    public Gtk.Label zoomed;
+
+    [GtkChild]
+    public Gtk.Label capture_ready;
 }
 
 [GtkTemplate (ui = "/components/test_gui_slider_box.ui")]
@@ -68,6 +80,15 @@ public class Controls : Gtk.Box {
     public Gtk.Button play;
     [GtkChild]
     public Gtk.Button capture;
+
+    [GtkChild]
+    public Gtk.ToggleButton imshow_grey;
+
+    [GtkChild]
+    public Gtk.ToggleButton imshow_thresh;
+
+    [GtkChild]
+    public Gtk.ToggleButton imshow_sharp;
 
     public CaptureConfig config { public get; private set; }
 
@@ -160,8 +181,24 @@ public class TestAppWindow : Gtk.ApplicationWindow {
         pipe.capture_success.connect(gallery.add_thumbnail);
         pipe.capture_failure.connect(on_error);
         pipe.notify["status"].connect(() => {
-            statusbar.status.set_text(pipe.status.to_string());
+            statusbar.status.set_text(@"State: $(pipe.status.to_string())");
         });
+        // @indra4837 if you ever need to connect to a property, here's how to
+        // do it. You can check the generated C to see the  boilerplate it
+        // creates (the "useless" variables are to avoid undefined behavior).
+        pipe.ptzf.notify["focused"].connect(() => {
+            statusbar.focused.sensitive = pipe.ptzf.focused;
+        });
+        pipe.ptzf.notify["aligned"].connect(() => {
+            statusbar.aligned.sensitive = pipe.ptzf.aligned;
+        });
+        pipe.ptzf.notify["zoomed"].connect(() => {
+            statusbar.zoomed.sensitive = pipe.ptzf.zoomed;
+        });
+        pipe.ptzf.notify["capture-ready"].connect(() => {
+            statusbar.capture_ready = pipe.ptzf.capture_ready;
+        });
+
 
         overlay_area.realize.connect(() => {
             // connect video overlay
@@ -185,7 +222,7 @@ public class TestAppWindow : Gtk.ApplicationWindow {
                 ctx.fill();
             }
         });
-        // connect buttons
+        // connect pipline state control buttons
         controls.play.clicked.connect(() => {
             var ret =  pipe.set_state(Gst.State.PLAYING);
             if (ret == Gst.StateChangeReturn.FAILURE) {
@@ -202,12 +239,30 @@ public class TestAppWindow : Gtk.ApplicationWindow {
             pipe.capture(controls.config);
         });
 
+        // set initial state of toggle buttons to ptzf defaults
+        controls.imshow_grey.set_active(pipe.ptzf.imshow_grey);
+        controls.imshow_thresh.set_active(pipe.ptzf.imshow_thresh);
+        controls.imshow_sharp.set_active(pipe.ptzf.imshow_sharp);
+        // and add callbacks to change the ptzf state in turn
+        controls.imshow_grey.toggled.connect((btn) => {
+            pipe.ptzf.imshow_grey = btn.get_active();
+        });
+        controls.imshow_thresh.toggled.connect((btn) => {
+            pipe.ptzf.imshow_thresh = btn.get_active();
+        });
+        controls.imshow_sharp.toggled.connect((btn) => {
+            pipe.ptzf.imshow_sharp = btn.get_active();
+        });
+
         // connect sliders
         var maybe_p_elem = pipe as Gst.Element;
         assert (maybe_p_elem != null);
         var p_elem = (!)maybe_p_elem;
         controls.add(new SliderBox(p_elem, "brightness"));
         controls.add(new SliderBox(p_elem, "zoom"));
+        // @indra4597 if you ever need to add more sliders to ptzf, you can do
+        // so like:
+        // controls.add(new SliderBox(pipe.ptzf, "foo", 0.0, 100.0));
 
         // cleanup pipeline when widget is destroyed
         this.destroy.connect(() => {
