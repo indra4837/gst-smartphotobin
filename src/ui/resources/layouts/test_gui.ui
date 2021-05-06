@@ -20,7 +20,6 @@
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="transition-type">slide-right</property>
-                <property name="reveal-child">True</property>
                 <child>
                   <placeholder/>
                 </child>
@@ -47,7 +46,6 @@
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="transition-type">slide-left</property>
-                <property name="reveal-child">True</property>
                 <child>
                   <placeholder/>
                 </child>
