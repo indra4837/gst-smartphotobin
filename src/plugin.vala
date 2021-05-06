@@ -76,10 +76,8 @@ public const string MUXER_ELEMENT = "@MUXER_ELEMENT@";
 public const string DEMUXER_ELEMENT = "@DEMUXER_ELEMENT@";
 /** Duration flash will be fired for in frames */
 public const float DEFAULT_FLASH_DURATION = 1.0f;
-/** Default bayer gains (white balance) for nvmanualcamerasrc */
-public const BayerGains DEFAULT_BAYER_GAINS = {
-	1.0f, 1.0f, 1.0f, 1.0f
-};
+/** Default bayer gains (RGB white balance) for nvmanualcamerasrc */
+public const BayerGains DEFAULT_BAYER_GAINS = {1.0, 1.0, 1.0};
 
 // Defaults for GstSmart.QaDrBin
 

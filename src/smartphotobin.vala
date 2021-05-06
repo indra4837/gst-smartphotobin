@@ -42,39 +42,34 @@ public enum Eye {
 }
 
 public struct BayerGains {
-	float r;
-	float g_even;
-	float g_odd;
-	float b;
+	double r;
+	/** both even and odd */
+	double g;
+	double b;
 	public BayerGains() {
 		r = DEFAULT_BAYER_GAINS.r;
-		g_even = DEFAULT_BAYER_GAINS.g_even;
-		g_odd = DEFAULT_BAYER_GAINS.g_odd;
+		g = DEFAULT_BAYER_GAINS.g;
 		b = DEFAULT_BAYER_GAINS.b;
 	}
 }
 
 public struct FlashConfig {
-	float delay;
-	uint offset;
-	float duration;
-	float overlap;
-	float brightness;
+	double delay;
+	double duration;
+	double overlap;
+	double brightness;
 	public FlashConfig() {
-		delay = 0.0f;
-		offset = 0;
-		duration = 1.0f;
-		overlap = 0.25f;
-		brightness = 1.0f;
+		delay = 0.0;
+		duration = 1.0;
+		overlap = 0.25;
+		brightness = 1.0;
 	}
 }
 
-static uint CaptureConfig_id_counter;
-static Mutex CaptureConfig_id_counter_mx;
 public struct CaptureConfig {
 	FlashConfig flash;
-	float exposure;
-	float gain;
+	double exposure;
+	double gain;
 	BayerGains wb;
 	Eye eye;
 	uint id;
@@ -84,9 +79,7 @@ public struct CaptureConfig {
 		gain = 1.0f;
 		wb = BayerGains();
 		eye = Eye.LEFT;
-		CaptureConfig_id_counter_mx.lock();
-		id = CaptureConfig_id_counter++;
-		CaptureConfig_id_counter_mx.unlock();
+		id = 0;
 	}
 }
 
@@ -128,7 +121,7 @@ public class PhotoBin: Gst.Pipeline {
 	/** BEGIN MEMBER VARIABLES */
 
 	/** Our camera source */
-	private dynamic Gst.Element camera;
+	public dynamic Gst.Element camera;
 	/** Our control element */
 	public dynamic Gst.Element ptzf;
 	/** Cached state of ptzf.focused */

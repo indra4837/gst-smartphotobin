@@ -36,19 +36,47 @@ public class StatusBar : Gtk.Statusbar {
     public Gtk.ToggleButton gallery;
 
     [GtkChild]
-    public Gtk.Label status;
+    Gtk.Label state;
 
     [GtkChild]
-    public Gtk.Label focused;
+    Gtk.Label focused;
 
     [GtkChild]
-    public Gtk.Label aligned;
+    Gtk.Label aligned;
 
     [GtkChild]
-    public Gtk.Label zoomed;
+    Gtk.Label zoomed;
 
     [GtkChild]
-    public Gtk.Label capture_ready;
+    Gtk.Label capture_ready;
+
+    public StatusBar(GstSmart.PhotoBin pipe) {
+        // change status label when the pipeline state changes.
+        pipe.notify["state"].connect(() => {
+            state.set_text(@"State: $(pipe.state.to_string())");
+        });
+
+        // these change the greyed out status of labels in the status bar
+        focused.sensitive = pipe.ptzf.focused;
+        pipe.focused.connect((value) => {
+            focused.sensitive = value;
+        });
+
+        aligned.sensitive = pipe.ptzf.aligned;
+        pipe.aligned.connect((value) => {
+            aligned.sensitive = value;
+        });
+
+        zoomed.sensitive = pipe.ptzf.zoomed;
+        pipe.zoomed.connect((value) => {
+            zoomed.sensitive = value;
+        });
+
+        capture_ready.sensitive = pipe.ptzf.capture_ready;
+        pipe.capture_ready.connect((value) => {
+            capture_ready.sensitive = value;
+        });
+    }
 }
 
 [GtkTemplate (ui = "/components/test_gui_slider_box.ui")]
@@ -59,7 +87,7 @@ public class SliderBox : Gtk.Box {
     [GtkChild]
     Gtk.Scale scale;
 
-    public SliderBox(Gst.Element e,
+    public SliderBox(Object o,
                      string prop_name,
                      double min = 0.0,
                      double max = 1.0) {
@@ -67,7 +95,117 @@ public class SliderBox : Gtk.Box {
         scale.set_range(min, max);
         // change value when the range is adjusted
         scale.value_changed.connect((range) => {
-            e.set(prop_name, range.get_value());
+            o.set(prop_name, range.get_value());
+        });
+    }
+}
+
+[GtkTemplate (ui = "/components/test_gui_capture_controls.ui")]
+public class CaptureControls : Gtk.Frame {
+    [GtkChild]
+    Gtk.Scale exposure;
+
+    [GtkChild]
+    Gtk.Scale gain;
+
+    [GtkChild]
+    Gtk.Scale r_gain;
+
+    [GtkChild]
+    Gtk.Scale g_gain;
+
+    [GtkChild]
+    Gtk.Scale b_gain;
+
+    [GtkChild]
+    Gtk.Switch right_eye;
+
+    [GtkChild]
+    Gtk.Scale flash_delay;
+
+    [GtkChild]
+    Gtk.Scale flash_duration;
+
+    [GtkChild]
+    Gtk.Scale flash_overlap;
+
+    [GtkChild]
+    Gtk.Scale flash_brightness;
+
+    /** Get a copy of the current CaptureConfig with an incremented id. */
+    private CaptureConfig _config = CaptureConfig();
+    public CaptureConfig config {
+        get {
+            ++_config.id;
+            return _config;
+        }
+    }
+
+    construct {
+        // setup controls
+        exposure.set_range(0.0, 1.0);
+        exposure.set_value(_config.exposure);
+        exposure.value_changed.connect(() => {
+            _config.exposure = exposure.get_value();
+        });
+
+        gain.set_range(0.0, 1.0);
+        gain.set_value(_config.gain);
+        gain.value_changed.connect(() => {
+            _config.gain = gain.get_value();
+        });
+
+        r_gain.set_range(0.0, 2.0);
+        r_gain.set_value(_config.wb.r);
+        r_gain.value_changed.connect(() => {
+            _config.wb.r = r_gain.get_value();
+        });
+
+        g_gain.set_range(0.0, 2.0);
+        g_gain.set_value(_config.wb.g);
+        g_gain.value_changed.connect(() => {
+            _config.wb.g = g_gain.get_value();
+        });
+
+
+        b_gain.set_range(0.0, 2.0);
+        b_gain.set_value(_config.wb.b);
+        b_gain.value_changed.connect(() => {
+            _config.wb.b = b_gain.get_value();
+        });
+
+        right_eye.set_active(_config.eye == Eye.RIGHT);
+        right_eye.activate.connect(() => {
+            if (right_eye.get_active()) {
+                // switch is to the right, so set right eye
+                _config.eye = Eye.RIGHT;
+            } else {
+                _config.eye = Eye.LEFT;
+            }
+        });
+
+        flash_delay.set_range(0.0, 1.0);
+        flash_delay.set_value(_config.flash.delay);
+        flash_delay.value_changed.connect(() => {
+            _config.flash.delay = flash_delay.get_value();
+        });
+
+        flash_duration.set_range(0.0, 1.0);
+        flash_duration.set_value(_config.flash.duration);
+        flash_duration.value_changed.connect(() => {
+            _config.flash.duration = flash_duration.get_value();
+        });
+
+        flash_overlap.set_range(0.0, 1.0);
+        flash_overlap.set_value(_config.flash.overlap);
+        flash_overlap.value_changed.connect(() => {
+            _config.flash.overlap = flash_overlap.get_value();
+        });
+
+        flash_brightness.set_range(0.0, 1.0);
+        flash_brightness.set_value(_config.flash.brightness);
+        flash_brightness.value_changed.connect(() => {
+            _config.flash.brightness = flash_brightness.get_value();
         });
     }
 }
@@ -75,25 +213,84 @@ public class SliderBox : Gtk.Box {
 [GtkTemplate (ui = "/components/test_gui_controls.ui")]
 public class Controls : Gtk.Box {
     [GtkChild]
-    public Gtk.Button stop;
+    Gtk.Button stop;
     [GtkChild]
-    public Gtk.Button play;
+    Gtk.Button play;
     [GtkChild]
-    public Gtk.Button capture;
+    Gtk.Button capture;
 
     [GtkChild]
-    public Gtk.ToggleButton imshow_grey;
+    Gtk.ToggleButton imshow_grey;
 
     [GtkChild]
-    public Gtk.ToggleButton imshow_thresh;
+    Gtk.ToggleButton imshow_thresh;
 
     [GtkChild]
-    public Gtk.ToggleButton imshow_sharp;
+    Gtk.ToggleButton imshow_sharp;
 
-    public CaptureConfig config { public get; private set; }
+    CaptureControls capture_controls = new CaptureControls();
 
-    construct {
-        config = CaptureConfig();
+    public Controls(GstSmart.PhotoBin pipe) {
+        // @indra4597 if you ever need to add more sliders to ptzf, you can do
+        // so like:
+        // controls.add(new SliderBox(pipe.ptzf, "foo", 0.0, 100.0));
+        // set the capture button to only be enabled when ptzf is updated
+        // to the capture_ready state
+        capture.set_sensitive(pipe.ptzf.capture_ready);
+        pipe.capture_ready.connect(capture.set_sensitive);
+
+        // connect pipline state control buttons
+        play.clicked.connect(() => {
+            var ret =  pipe.set_state(Gst.State.PLAYING);
+            if (ret == Gst.StateChangeReturn.FAILURE) {
+                on_error("Could not set pipeline to PLAYING state");
+            }
+        });
+        stop.clicked.connect(() => {
+            var ret = pipe.set_state(Gst.State.READY);
+            if (ret == Gst.StateChangeReturn.FAILURE) {
+                on_error("Could not set pipeline to READY state");
+            }
+        });
+        capture.clicked.connect(() => {
+            pipe.capture(capture_controls.config);
+        });
+
+        // set initial state of toggle buttons to ptzf defaults
+        imshow_grey.set_active(pipe.ptzf.imshow_grey);
+        imshow_thresh.set_active(pipe.ptzf.imshow_thresh);
+        imshow_sharp.set_active(pipe.ptzf.imshow_sharp);
+        // and add callbacks to change the ptzf state in turn
+        imshow_grey.toggled.connect((btn) => {
+            pipe.ptzf.imshow_grey = btn.get_active();
+        });
+        imshow_thresh.toggled.connect((btn) => {
+            pipe.ptzf.imshow_thresh = btn.get_active();
+        });
+        imshow_sharp.toggled.connect((btn) => {
+            pipe.ptzf.imshow_sharp = btn.get_active();
+        });
+
+        // add sliders for brightness and zoom
+        add(new SliderBox(pipe.camera, "brightness"));
+        add(new SliderBox(pipe.ptzf, "zoom"));
+        add(capture_controls);
+    }
+
+    private void on_error(string errmsg) {
+        var maybe_window = this.get_toplevel() as Gtk.Window;
+        if (maybe_window == null) {
+            warning("Could not get top level window as GtkWindow.");
+            warning(errmsg);
+            return;
+        }
+        var dialog = new Gtk.MessageDialog(
+            (!)maybe_window,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.ERROR,
+            Gtk.ButtonsType.CLOSE,
+            errmsg);
+        dialog.show();
     }
 }
 
@@ -145,15 +342,25 @@ public class TestAppWindow : Gtk.ApplicationWindow {
     construct {
         pipe = new GstSmart.PhotoBin();
         gallery = new Gallery();
-        controls = new Controls();
-        statusbar = new StatusBar();
+        controls = new Controls(pipe);
+        statusbar = new StatusBar(pipe);
 
-        // add the ui elements to the left and right panels
-        left_revealer.add(gallery);
-        right_revealer.add(controls);
-
-        // add the statusbar on the bottom and connect it's buttons
+        // add the statusbar
         main_box.add(statusbar);
+
+        // add the ui elements to the left and right panels and connect them
+        left_revealer.add(gallery);
+        statusbar.gallery.toggled.connect((btn) => {
+            // toggles gallery
+            left_revealer.reveal_child = btn.active;
+        });
+        right_revealer.add(controls);
+        statusbar.controls.toggled.connect((btn) => {
+            // toggles right revealer
+            right_revealer.reveal_child = btn.active;
+        });
+
+        // setup fullscreen button
         this.window_state_event.connect((state) => {
             // cache the fullscreen state
             is_fullscreen = (bool)(state.new_window_state & Gdk.WindowState.FULLSCREEN);
@@ -166,42 +373,13 @@ public class TestAppWindow : Gtk.ApplicationWindow {
                 fullscreen();
             }
         });
-        statusbar.controls.toggled.connect((btn) => {
-            // toggles right revealer
-            right_revealer.reveal_child = btn.active;
-        });
-        statusbar.gallery.toggled.connect((btn) => {
-            // toggles gallery
-            left_revealer.reveal_child = btn.active;
-        });
 
-
-        // connect pipeline callbacks
-        pipe.capture_ready.connect(controls.capture.set_sensitive);
+        // connect capture callbacks
         pipe.capture_success.connect(gallery.add_thumbnail);
         pipe.capture_failure.connect(on_error);
-        pipe.notify["status"].connect(() => {
-            statusbar.status.set_text(@"State: $(pipe.status.to_string())");
-        });
-        // @indra4837 if you ever need to connect to a property, here's how to
-        // do it. You can check the generated C to see the  boilerplate it
-        // creates (the "useless" variables are to avoid undefined behavior).
-        pipe.ptzf.notify["focused"].connect(() => {
-            statusbar.focused.sensitive = pipe.ptzf.focused;
-        });
-        pipe.ptzf.notify["aligned"].connect(() => {
-            statusbar.aligned.sensitive = pipe.ptzf.aligned;
-        });
-        pipe.ptzf.notify["zoomed"].connect(() => {
-            statusbar.zoomed.sensitive = pipe.ptzf.zoomed;
-        });
-        pipe.ptzf.notify["capture-ready"].connect(() => {
-            statusbar.capture_ready = pipe.ptzf.capture_ready;
-        });
 
-
+        // set video overlay window id when overlay area is realized
         overlay_area.realize.connect(() => {
-            // connect video overlay
             var maybe_area_win = overlay_area.get_window() as Gdk.X11.Window;
             if (maybe_area_win != null) {
                 var area_win = (!)maybe_area_win;
@@ -210,10 +388,10 @@ public class TestAppWindow : Gtk.ApplicationWindow {
                 error("could not get DrawingArea window as Gdk.X11.Window");
             }
         });
+        // If the pipeline is less than the paused state, we need to draw
+        // a black box over the drawing area using the Cairo.Context, or it
+        // doesn't redraw and we get trails and junk.
         overlay_area.draw.connect((ctx) => {
-            // If the pipeline is less than the paused state, we need to draw
-            // a black box over the drawing area using the Cairo.Context, or it
-            // doesn't redraw and we get trails and junk.
             if (pipe.state < Gst.State.PAUSED) {
                 Gtk.Allocation allocation;
                 overlay_area.get_allocation(out allocation);
@@ -222,47 +400,12 @@ public class TestAppWindow : Gtk.ApplicationWindow {
                 ctx.fill();
             }
         });
-        // connect pipline state control buttons
-        controls.play.clicked.connect(() => {
-            var ret =  pipe.set_state(Gst.State.PLAYING);
-            if (ret == Gst.StateChangeReturn.FAILURE) {
-                on_error("Could not set pipeline to PLAYING state");
-            }
+        pipe.notify["state"].connect(() => {
+            // If the pipeline state changes, We should redraw the overlay_area.
+            // Otherwise on stop, for example, it'll continue to display the
+            // previous frame until the window is resized.
+            overlay_area.queue_draw();
         });
-        controls.stop.clicked.connect(() => {
-            var ret = pipe.set_state(Gst.State.READY);
-            if (ret == Gst.StateChangeReturn.FAILURE) {
-                on_error("Could not set pipeline to READY state");
-            }
-        });
-        controls.capture.clicked.connect(() => {
-            pipe.capture(controls.config);
-        });
-
-        // set initial state of toggle buttons to ptzf defaults
-        controls.imshow_grey.set_active(pipe.ptzf.imshow_grey);
-        controls.imshow_thresh.set_active(pipe.ptzf.imshow_thresh);
-        controls.imshow_sharp.set_active(pipe.ptzf.imshow_sharp);
-        // and add callbacks to change the ptzf state in turn
-        controls.imshow_grey.toggled.connect((btn) => {
-            pipe.ptzf.imshow_grey = btn.get_active();
-        });
-        controls.imshow_thresh.toggled.connect((btn) => {
-            pipe.ptzf.imshow_thresh = btn.get_active();
-        });
-        controls.imshow_sharp.toggled.connect((btn) => {
-            pipe.ptzf.imshow_sharp = btn.get_active();
-        });
-
-        // connect sliders
-        var maybe_p_elem = pipe as Gst.Element;
-        assert (maybe_p_elem != null);
-        var p_elem = (!)maybe_p_elem;
-        controls.add(new SliderBox(p_elem, "brightness"));
-        controls.add(new SliderBox(p_elem, "zoom"));
-        // @indra4597 if you ever need to add more sliders to ptzf, you can do
-        // so like:
-        // controls.add(new SliderBox(pipe.ptzf, "foo", 0.0, 100.0));
 
         // cleanup pipeline when widget is destroyed
         this.destroy.connect(() => {
