@@ -1,5 +1,5 @@
 [wrap-git]
-url = https://github.com/mdegans/gst-eyescan.git
+url = https://github.com/indra4837/gst-eyescan.git
 revision = dev
 
 [provide]
