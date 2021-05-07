@@ -605,6 +605,9 @@ public class PhotoBin: Gst.Pipeline {
 	 */
 	public override void
 	state_changed(Gst.State old, Gst.State current, Gst.State pending) {
+		Gst.Debug.BIN_TO_DOT_FILE(
+			this, Gst.DebugGraphDetails.ALL,
+			@"$(this.name).$(current.to_string())");
 		// if we're not yet in the playing state, we should disable QA.
 		// otherwise QA will never complete.
 		state = current;
