@@ -1,6 +1,6 @@
 [wrap-git]
 url = https://github.com/mdegans/gst-eyescan.git
-revision = refactor
+revision = testing
 
 [provide]
 gst_eyescan = gst_eyescan_dep
