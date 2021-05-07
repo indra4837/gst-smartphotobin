@@ -118,9 +118,6 @@ public class CaptureControls : Gtk.Frame {
     Gtk.Scale b_gain;
 
     [GtkChild]
-    Gtk.Switch right_eye;
-
-    [GtkChild]
     Gtk.Scale flash_delay;
 
     [GtkChild]
@@ -174,16 +171,6 @@ public class CaptureControls : Gtk.Frame {
             _config.wb.b = b_gain.get_value();
         });
 
-        right_eye.set_active(_config.eye == Eye.RIGHT);
-        right_eye.activate.connect(() => {
-            if (right_eye.get_active()) {
-                // switch is to the right, so set right eye
-                _config.eye = Eye.RIGHT;
-            } else {
-                _config.eye = Eye.LEFT;
-            }
-        });
-
         flash_delay.set_range(0.0, 1.0);
         flash_delay.set_value(_config.flash.delay);
         flash_delay.value_changed.connect(() => {
@@ -228,6 +215,12 @@ public class Controls : Gtk.Box {
     [GtkChild]
     Gtk.ToggleButton imshow_sharp;
 
+    [GtkChild]
+    Gtk.Button left_eye;
+
+    [GtkChild]
+    Gtk.Button right_eye;
+
     CaptureControls capture_controls = new CaptureControls();
 
     public Controls(GstSmart.PhotoBin pipe) {
@@ -248,13 +241,25 @@ public class Controls : Gtk.Box {
                 imshow_grey.sensitive = false;
                 imshow_thresh.sensitive = false;
                 imshow_sharp.sensitive = false;
+                right_eye.sensitive = false;
+                left_eye.sensitive = false;
                 zoom.sensitive = false;
             } else {
                 imshow_grey.sensitive = true;
                 imshow_thresh.sensitive = true;
                 imshow_sharp.sensitive = true;
                 zoom.sensitive = true;
+                right_eye.sensitive = true;
+                left_eye.sensitive = true;
             }
+        });
+
+        // triggers for realignment
+        right_eye.clicked.connect(() => {
+            pipe.ptzf.left_eye = false;
+        });
+        left_eye.clicked.connect(() => {
+            pipe.ptzf.left_eye = true;
         });
 
         // connect pipline state control buttons

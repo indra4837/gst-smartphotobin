@@ -36,11 +36,6 @@ public class PhotoBinConfig: Object {
 	}
 }
 
-public enum Eye {
-	RIGHT,
-	LEFT,
-}
-
 public struct BayerGains {
 	double r;
 	/** both even and odd */
@@ -71,14 +66,12 @@ public struct CaptureConfig {
 	double exposure;
 	double gain;
 	BayerGains wb;
-	Eye eye;
 	uint id;
 	public CaptureConfig() {
 		flash = FlashConfig();
 		exposure = 1.0f;
 		gain = 1.0f;
 		wb = BayerGains();
-		eye = Eye.LEFT;
 		id = 0;
 	}
 }
@@ -91,18 +84,6 @@ public class PhotoBin: Gst.Pipeline {
 	/** BEGIN CONSTS */
 	private const uint MAX_REQUESTS = 10;
 	/** END CONSTS */
-
-	/** BEGIN PRIVATE CLASSES/STRUCTS */
-
-	/** Class for capture requests */
-	private struct Request {
-		public CaptureConfig config;
-		public Request(CaptureConfig config) {
-			this.config = config;
-		}
-	}
-
-	/** END PRIVATE CLASSES/STRUCTS */
 
 	/** BEGIN ENUMS */
 
@@ -162,7 +143,8 @@ public class PhotoBin: Gst.Pipeline {
 	private bool prerolling = true;
 	/** If flash firing is needed. This is it's config. */
 	private FlashConfig? flash_config = null;
-
+	/** Saved preview config, to be re-applied after capture */
+	private CaptureConfig? preview_config = null;
 
 	/** END MEMBER VARIABLES */
 
@@ -492,6 +474,8 @@ public class PhotoBin: Gst.Pipeline {
 				if (this._capturing) {
 					this.capturing = false;
 				}
+				// re-apply the preview config
+				restore_preview_config();
 				// drop the buffer
 				return Gst.PadProbeReturn.DROP;
 			}
@@ -580,15 +564,35 @@ public class PhotoBin: Gst.Pipeline {
 			this.status = CaptureStatus.REQUESTED;
 			this.capturing = true;
 
-			// set properties
-			this.camera.exposuretime = config.exposure;
-			this.camera.gain = config.gain;
-			// TODO: WB
+			// save the preview config to restore after capture
+			remember_preview_config();
 
-			this.allow_buffers = 5;
+			// apply (most of) the new config
+			apply_config(config);
+
+			// set properties
 			this.flash_config = config.flash;
+			this.allow_buffers = 10;
 		}
 	}
+
+	private void apply_config(CaptureConfig config) {
+		this.camera.exposuretime = config.exposure;
+		this.camera.gain = config.gain;
+	}
+
+	private void remember_preview_config() {
+		var conf = CaptureConfig();
+		conf.exposure = this.camera.exposuretime;
+		conf.gain = this.camera.gain;
+		this.preview_config = conf;
+	}
+
+	public void restore_preview_config() {
+		assert(this.preview_config != null);
+		apply_config((!)(this.preview_config));
+	}
+
 
 	/** END METHODS */
 
