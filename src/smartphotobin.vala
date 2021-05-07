@@ -589,8 +589,9 @@ public class PhotoBin: Gst.Pipeline {
 	}
 
 	public void restore_preview_config() {
-		assert(this.preview_config != null);
-		apply_config((!)(this.preview_config));
+		if (this.preview_config != null) {
+			apply_config((!)(this.preview_config));
+		}
 	}
 
 
