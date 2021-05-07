@@ -1,6 +1,6 @@
 [wrap-git]
-url = https://github.com/indra4837/gst-eyescan.git
-revision = dev
+url = https://github.com/mdegans/gst-eyescan.git
+revision = test
 
 [provide]
 gst_eyescan = gst_eyescan_dep
